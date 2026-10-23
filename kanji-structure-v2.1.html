@@ -1,0 +1,52 @@
+<!doctype html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>漢字ゲームβ v2.1｜構造判定実験</title><style>
+:root{font-family:system-ui,-apple-system,'Yu Gothic',sans-serif;color:#1b2c44;background:#f5f7fb}*{box-sizing:border-box}main{max-width:760px;margin:auto;padding:16px}h1{font-size:1.4rem}h2{font-size:1.1rem}.card{background:white;padding:16px;border-radius:14px;margin:14px 0;box-shadow:0 2px 12px #0001}.controls{display:flex;gap:9px;align-items:center;flex-wrap:wrap}button,select,input{font:inherit}button,select{padding:10px 14px;border:1px solid #afbdd1;border-radius:10px;background:white;color:#183254}button.primary{background:#2459b5;color:white;border-color:#2459b5}.pad{position:relative;width:min(100%,510px);aspect-ratio:1;margin:14px auto;border:2px solid #c0cfe4;border-radius:12px;overflow:hidden;background:linear-gradient(90deg,transparent 49.85%,#e8edf5 50%,transparent 50.15%),linear-gradient(transparent 49.85%,#e8edf5 50%,transparent 50.15%),white}.pad canvas{width:100%;height:100%;touch-action:none;display:block}.muted{color:#64748b;font-size:.9rem}#result{white-space:pre-wrap;background:#eef4fb;border-radius:10px;padding:14px;line-height:1.7}#result[data-kind="ok"]{background:#edf8f0}#result[data-kind="retry"]{background:#fff7e9}#result[data-kind="uncertain"]{background:#eff2f7}.badge{display:inline-block;border-radius:20px;background:#e4ecfa;padding:4px 9px;font-size:.8rem}label{display:inline-flex;align-items:center;gap:6px}li{margin:5px 0}a{color:#2459b5}#metrics{font-size:.86rem;white-space:pre-wrap;color:#475569}</style></head><body><main>
+<h1>漢字ゲームβ v2.1 <span class="badge">構造判定の試作機</span></h1>
+<p class="muted">お手本との位置の距離ではなく、線の交差・長さ比・筆画の内部構造を重視します。まずは <b>土・士・山</b> の3文字限定。判定は研究用で、教育上の確定的な採点ではありません。</p>
+<section class="card"><div class="controls"><label>出題 <select id="target"><option>土</option><option>士</option><option>山</option></select></label><button id="clear">消す</button><button id="undo">一画戻す</button></div><div class="pad"><canvas id="pad" width="600" height="600" aria-label="漢字を手書きする場所"></canvas></div><div class="controls"><button id="judge" class="primary">構造で判定</button><button id="save">JSONを保存</button></div><p id="result" aria-live="polite">まず「土」を書いて「構造で判定」を押してください。</p><details><summary>検出した構造の数値を見る</summary><pre id="metrics"></pre></details></section>
+<section class="card"><h2>過去の筆跡でも再判定できます</h2><p class="muted">以前のv1.9・v2.0で保存したJSONを選ぶと、同じ筆跡をこの新方式で評価します。画面内で処理し、サーバーには送信しません。</p><input type="file" id="import" accept=".json,application/json"></section>
+<section class="card muted"><b>試作機の仕様</b><ul><li>土・士：画数、横・縦・横の方向、2か所の交差、横線の長さの大小、上下配置を検査</li><li>山：左の縦・折れ・右の縦の構成、縦部分の相対長、下側のつながり、異常な曲がりを検査</li><li>曖昧な形は無理に正解とせず「判定保留」にします</li><li>漢字認識AIではありません。3文字以外の認識、書体差の十分な検証、複雑な漢字への一般化は未実装</li></ul><p>線の交差には折れ線の距離を用い、わずかな隙間には文字サイズに比例した許容幅を設定しています。</p></section>
+</main><script>
+'use strict';const $=s=>document.getElementById(s);let strokes=[],cur=null,lastReport='';const cvs=$('pad'),ctx=cvs.getContext('2d');const len=(a,b)=>Math.hypot(a.x-b.x,a.y-b.y);const clamp=(x,a,b)=>Math.max(a,Math.min(b,x));
+function point(e){let b=cvs.getBoundingClientRect();return{x:(e.clientX-b.left)*600/b.width,y:(e.clientY-b.top)*600/b.height,t:Date.now(),pressure:e.pressure??0}}
+function paint(){ctx.clearRect(0,0,600,600);ctx.lineWidth=7;ctx.lineCap=ctx.lineJoin='round';ctx.strokeStyle='#2459b5';for(let s of [...strokes,...(cur?[cur]:[])]){if(!s.length)continue;ctx.beginPath();ctx.moveTo(s[0].x,s[0].y);for(let q of s.slice(1))ctx.lineTo(q.x,q.y);ctx.stroke()}}
+cvs.addEventListener('pointerdown',e=>{e.preventDefault();cvs.setPointerCapture(e.pointerId);cur=[point(e)];paint()});cvs.addEventListener('pointermove',e=>{if(!cur)return;e.preventDefault();let p=point(e);if(len(p,cur[cur.length-1])>=1)cur.push(p);paint()});function end(e){if(!cur)return;e.preventDefault();strokes.push(cur);cur=null;paint();$('result').textContent=`${strokes.length}画を書きました。構造で判定できます。`;delete $('result').dataset.kind}cvs.addEventListener('pointerup',end);cvs.addEventListener('pointercancel',end);
+function resample(s,n=55){if(s.length<2)return Array(n).fill(s[0]);let ds=[0];for(let i=1;i<s.length;i++)ds.push(ds[i-1]+len(s[i],s[i-1]));let out=[],k=1;for(let i=0;i<n;i++){let t=ds.at(-1)*i/(n-1);while(k<ds.length-1&&ds[k]<t)k++;let f=(t-ds[k-1])/(ds[k]-ds[k-1]||1);out.push({x:s[k-1].x*(1-f)+s[k].x*f,y:s[k-1].y*(1-f)+s[k].y*f})}return out}
+const bounds=s=>{let p=s.flat(),xs=p.map(q=>q.x),ys=p.map(q=>q.y);return {xmin:Math.min(...xs),xmax:Math.max(...xs),ymin:Math.min(...ys),ymax:Math.max(...ys)}};
+function bstroke(s){let x=s.map(p=>p.x),y=s.map(p=>p.y);return{xmin:Math.min(...x),xmax:Math.max(...x),ymin:Math.min(...y),ymax:Math.max(...y),w:Math.max(...x)-Math.min(...x),h:Math.max(...y)-Math.min(...y),cx:(Math.max(...x)+Math.min(...x))/2,cy:(Math.max(...y)+Math.min(...y))/2}}
+function segdist(p,a,b){let dx=b.x-a.x,dy=b.y-a.y,t=clamp(((p.x-a.x)*dx+(p.y-a.y)*dy)/(dx*dx+dy*dy||1),0,1);return len(p,{x:a.x+t*dx,y:a.y+t*dy})}
+function mindist(a,b){let d=Infinity;for(let p of a)for(let i=1;i<b.length;i++)d=Math.min(d,segdist(p,b[i-1],b[i]));for(let p of b)for(let i=1;i<a.length;i++)d=Math.min(d,segdist(p,a[i-1],a[i]));return d}
+function vertPart(s){let b=bstroke(s);let pts=s.filter(p=>p.y<=b.ymin+b.h*.4);return {height:b.h,top:b.ymin,low:b.ymax}}
+function check(st,target){let data={target,strokes:st.length,checks:[],warnings:[],metrics:{}};let bad=x=>data.checks.push(x),warn=x=>data.warnings.push(x);if(st.length!==3){bad(`3画の漢字ですが、入力は${st.length}画です。`);return {...data,kind:'retry'}}
+const bb=bounds(st),W=Math.max(bb.xmax-bb.xmin,1),H=Math.max(bb.ymax-bb.ymin,1),scale=Math.max(W,H),s=st.map(x=>resample(x)),b=s.map(bstroke),d=(i,j)=>mindist(s[i],s[j])/scale;const dx=i=>s[i].at(-1).x-s[i][0].x,dy=i=>s[i].at(-1).y-s[i][0].y;data.metrics={全体幅:Math.round(W),全体高さ:Math.round(H)};
+if(target==='土'||target==='士'){
+ const r=b[2].w/Math.max(b[0].w,1);data.metrics={...data.metrics,上下横線長さ比:Number(r.toFixed(2)),上横線と縦線の最短距離:Number(d(0,1).toFixed(3)),下横線と縦線の最短距離:Number(d(1,2).toFixed(3))};
+ if(Math.abs(dx(0))<b[0].h*1.3 || Math.abs(dx(2))<b[2].h*1.3)bad('横線が横方向になっていません。');
+ if(b[1].h<b[1].w*1.4)bad('2画目の縦線が縦方向になっていません。');
+ if(b[0].cy>b[2].cy-.08*scale)bad('上下の横線の位置関係が不明瞭です。');
+ if(d(0,1)>.085)bad('上の横線と縦線が離れています。');else if(d(0,1)>.048)warn('上の横線と縦線に少し隙間があります。');
+ if(d(1,2)>.085)bad('下の横線と縦線が離れています。');else if(d(1,2)>.048)warn('下の横線と縦線に少し隙間があります。');
+ const top=b[0].cy,bot=b[2].cy;if(b[1].ymax<bot-.08*scale)bad('縦線が下の横線まで届いていません。');
+ if(b[1].ymin>top+.08*scale)bad('縦線が上の横線まで届いていません。');
+ if(target==='土'){if(r<.85)bad('下の横線が上よりかなり短く、「士」に近い形です。');else if(r<1.08)warn('上下の横線の長さが近く、「土」と「士」の区別が曖昧です。')}
+ else {if(r>1.17)bad('下の横線が上より長く、「土」に近い形です。');else if(r>.93)warn('上下の横線の長さが近く、「士」と「土」の区別が曖昧です。')}
+ // Contact should occur near the interior of the horizontal strokes rather than at their extreme ends.
+ for(let i of [0,2]){let v=b[1].cx;if(v<b[i].xmin-.065*scale||v>b[i].xmax+.065*scale)bad(`${i+1}画目の横線と縦線の左右位置がずれています。`)}
+}else{
+ const ratio2=b[1].h/H,ratio3=b[2].h/H,ratio1=b[0].w/Math.max(b[0].h,1);data.metrics={...data.metrics,'2画目の縦方向の広がり':Number(ratio2.toFixed(2)),'3画目の縦方向の広がり':Number(ratio3.toFixed(2)),'1画目の横ぶれ比':Number(ratio1.toFixed(2)),'1・2画目の距離':Number(d(0,1).toFixed(3)),'2・3画目の距離':Number(d(1,2).toFixed(3))};
+ if(b[0].h<H*.35)bad('1画目の縦方向の長さが短すぎます。');
+ if(ratio1>.33)bad('1画目が横方向に大きく曲がっています。');else if(ratio1>.22)warn('1画目が少し横方向に曲がっています。');
+ if(b[1].w<W*.48)bad('2画目の横方向の部分が短すぎます。');
+ if(ratio2<.18)bad('2画目の縦方向の部分が極端に短いです。');else if(ratio2<.26)warn('2画目の縦方向の部分が短めです。');
+ if(ratio3<.20)bad('3画目の縦線が極端に短いです。');else if(ratio3<.27)warn('3画目の縦線が短めです。');
+ if(b[2].h<b[2].w*1.3)bad('3画目が縦線になっていません。');
+ if(d(0,1)>.09)bad('左の部分と下側が離れています。');
+ if(d(1,2)>.09)bad('右の部分と下側が離れています。');
+ if(b[2].cx<b[0].cx+.34*W)bad('右の縦線が左に寄りすぎています。');
+ if(b[0].ymax<b[1].ymax-.12*H||b[2].ymax<b[1].ymax-.12*H)bad('下側の線が適切につながっていません。');
+}
+return {...data,kind:data.checks.length?'retry':data.warnings.length?'uncertain':'ok'} }
+function judge(){if(!strokes.length){$('result').textContent='文字を書いてください。';return}let target=$('target').value,r=check(strokes,target);const tag={ok:'⭕️ 構造上は正解',retry:'✏️ 構造を確認しよう',uncertain:'🔎 判定保留（確認が必要）'};let issues=r.checks.length?r.checks:r.warnings;lastReport=tag[r.kind]+'\n'+(issues.length?issues.map(x=>'・'+x).join('\n'):'画数、線の向き、接続、位置関係を満たしています。')+'\n\n※学習用の暫定判定。線の太さ、書体差、滑らかな曲線などの全条件を保証しません。';$('result').textContent=lastReport;$('result').dataset.kind=r.kind;$('metrics').textContent=JSON.stringify(r.metrics,null,2);return r}
+$('judge').onclick=judge;$('clear').onclick=()=>{strokes=[];cur=null;paint();$('result').textContent='消しました。もう一度書けます。';$('metrics').textContent=''};$('undo').onclick=()=>{strokes.pop();paint();$('result').textContent=`${strokes.length}画を書きました。`};$('target').onchange=()=>{$('clear').click()};
+$('import').onchange=async e=>{let f=e.target.files[0];if(!f)return;try{let v=JSON.parse(await f.text());if(!Array.isArray(v.strokes))throw Error('strokesがありません');if(!['土','士','山'].includes(v.target))throw Error('土・士・山のJSONを選んでください');$('target').value=v.target;strokes=v.strokes;paint();judge();$('result').textContent='過去のJSONを構造方式で再判定しました：'+f.name+'\n\n'+$('result').textContent}catch(err){$('result').textContent='読み込みエラー：'+err.message}e.target.value=''};
+$('save').onclick=()=>{let r=strokes.length?check(strokes,$('target').value):null;let data={schema:'kanji-structure-v2.1',target:$('target').value,createdAt:new Date().toISOString(),canvas:{width:600,height:600},diagnostic:lastReport,structuralResult:r,strokes};let url=URL.createObjectURL(new Blob([JSON.stringify(data,null,2)],{type:'application/json'})),a=document.createElement('a');a.href=url;a.download='kanji-structure-'+$('target').value+'-'+Date.now()+'.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000)};
+</script></body></html>
