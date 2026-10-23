@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>漢字ゲームβ｜最新版を開く</title>
+<style>
+body{font-family:system-ui,-apple-system,"Yu Gothic",sans-serif;background:#f5f7fb;color:#17243b;margin:0}
+main{max-width:650px;margin:12vh auto;padding:24px}
+section{background:white;border-radius:16px;padding:24px;box-shadow:0 3px 18px #0001}
+h1{font-size:1.5rem}p{line-height:1.7}
+button,a.link{display:block;box-sizing:border-box;width:100%;padding:13px;margin:12px 0;border-radius:10px;border:1px solid #2459b5;color:#2459b5;background:white;text-decoration:none;text-align:center;font-size:1rem}
+button.primary{background:#2459b5;color:white}
+small{color:#526078}
+</style>
+</head>
+<body><main><section>
+<h1>漢字ゲームβ</h1>
+<p id="status" role="status">アップロードされた最新版を確認しています…</p>
+<div id="actions" hidden>
+<button id="retry" class="primary">もう一度確認する</button>
+<div id="options"></div>
+</div>
+<small>このページはゲーム本体ではなく、最新版を開くための入口です。</small>
+</section></main>
+<script>
+'use strict';
+const owner='arinorinet-hub', repo='kanji-game-beta', branch='main';
+const base='https://'+owner+'.github.io/'+repo+'/';
+const api='https://api.github.com/repos/'+owner+'/'+repo;
+const status=document.getElementById('status');
+const actions=document.getElementById('actions');
+const options=document.getElementById('options');
+const ignore=/^(?:index\.html|404\.html)$/i;
+function isGame(path){return /\.html?$/i.test(path)&&!ignore.test(path)&&!/(?:back[\s_-]*up|backup)/i.test(path)}
+function gameUrl(path,sha){return base+path.split('/').map(encodeURIComponent).join('/')+'?rev='+encodeURIComponent(sha||Date.now().toString())}
+async function readJson(url){
+ const response=await fetch(url,{cache:'no-store',headers:{'Accept':'application/vnd.github+json'}});
+ if(!response.ok)throw Error('GitHub HTTP '+response.status);
+ return response.json();
+}
+function showChoices(paths){
+ options.replaceChildren();
+ for(const name of paths){
+  const a=document.createElement('a');
+  a.className='link';a.href=gameUrl(name);
+  a.textContent=name+' を開く';
+  options.appendChild(a);
+ }
+ actions.hidden=false;
+}
+async function openLatest(){
+ actions.hidden=true;status.textContent='最新版を確認しています…';
+ try{
+  // Latest non-backup HTML changed in recent commits wins, regardless of original filename.
+  const commits=await readJson(api+'/commits?sha='+encodeURIComponent(branch)+'&per_page=20');
+  for(const commit of commits){
+   const detail=await readJson(api+'/commits/'+encodeURIComponent(commit.sha));
+   const files=(detail.files||[]).filter(f=>['added','modified','renamed'].includes(f.status)&&isGame(f.filename));
+   if(files.length){
+    const file=files[0].filename;
+    status.textContent='「'+file+'」を開きます…';
+    location.replace(gameUrl(file,commit.sha));
+    return;
+   }
+  }
+  throw Error('最近の更新にゲーム本体が見つかりません');
+ }catch(e){
+  status.textContent='自動起動できませんでした。下からゲームを直接開けます。 ('+e.message+')';
+  actions.hidden=false;
+  try{
+    const contents=await readJson(api+'/contents?ref='+encodeURIComponent(branch));
+    const names=contents.filter(x=>x.type==='file'&&isGame(x.path)).map(x=>x.path);
+    if(!names.length)names.push('Index.html');
+    showChoices(names);
+  }catch(_){showChoices(['Index.html']);}
+ }
+}
+document.getElementById('retry').onclick=openLatest;
+openLatest();
+</script></body></html>
