@@ -1,0 +1,141 @@
+<!doctype html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>漢字ゲームβ｜外部DB版</title><style>body{font-family:system-ui,'Yu Gothic',sans-serif;background:#f5f7fb;color:#17243b;margin:0}main{max-width:860px;margin:auto;padding:18px}h1{font-size:1.5rem}.card{background:white;padding:16px;border-radius:14px;margin:12px 0;box-shadow:0 2px 10px #0001}.controls{display:flex;flex-wrap:wrap;gap:8px;align-items:center}button,select{font:inherit;padding:9px 12px;border-radius:9px;border:1px solid #aebbd1;background:white}button.primary{background:#2459b5;color:white;border-color:#2459b5}button:disabled{opacity:.45}.pad{position:relative;width:min(100%,540px);aspect-ratio:1;margin:12px auto;border:2px solid #b4c4dd;border-radius:12px;overflow:hidden;background:linear-gradient(90deg,transparent 49.85%,#e4eaf4 50%,transparent 50.15%),linear-gradient(transparent 49.85%,#e4eaf4 50%,transparent 50.15%),white}#guide,#ink{position:absolute;inset:0;width:100%;height:100%}#ink{touch-action:none;cursor:crosshair}#guide{pointer-events:none}.small{font-size:.88rem;color:#526078}#status{white-space:pre-line}a{color:#2459b5}#result{white-space:pre-wrap;background:#f1f5fc;border-radius:9px;padding:12px}svg{overflow:visible}</style></head><body><main><h1>漢字ゲームβ｜文字識別テスト v1.9</h1><p class="small">筆順・画数・お手本はKanjiVG公式SVGのみから読み込みます。お手本を隠して書く文字識別テストです。出題字と別の字を書いた場合もJSONで記録できます。文字候補を比較し、⭕️・❌・再挑戦を試験判定します。</p><section class="card"><div class="controls"><label>練習する漢字 <select id="char"><option>山</option><option>口</option><option>日</option><option>一</option><option>十</option><option>川</option><option>土</option><option>士</option></select></label><button id="reload">外部DBから読み込む</button></div><p class="small">通信で読み込めない場合：<b>KanjiVG公式SVGをファイルから読み込む</b>（通信不要）</p><input type="file" id="svgfile" accept=".svg,image/svg+xml" multiple><p class="small" id="offlinehelp"></p><p id="status">読み込み待ち</p><p class="small" id="source"></p><div class="controls"><button id="prev">前の画</button><button id="next">次の画</button><button id="all">全画表示</button><label><input type="checkbox" id="hideguide" checked> お手本を隠す</label><span id="step"></span></div><div class="pad"><svg id="guide" viewBox="0 0 109 109" aria-label="外部DBの筆画お手本"></svg><canvas id="ink" width="600" height="600" aria-label="手書き入力欄"></canvas></div><div class="controls"><button id="undo">一画戻す</button><button id="clear">消す</button><button class="primary" id="judge">判定（試験的）</button><button id="export">JSON保存</button><label>JSON再読み込み <input type="file" id="import" accept=".json,application/json"></label></div><p id="result">お手本の読み込み後に書いてください。</p></section><section class="card small"><b>正解データの原則</b><p>正解の筆画と画数はKanjiVGのSVGから抽出。データを取得できないときは正解判定を停止します。筆順・形状の類似度、筆画対応、字形アドバイスは試験的な推定で、学習者の合否には使用しません。文字認識は表示中の8字だけを対象とする試験版です。読み・意味・学年は未実装です。</p><p>出典：<a href="https://github.com/KanjiVG/kanjivg" target="_blank" rel="noopener">KanjiVG</a> / © Ulrich Apel and contributors / <a href="https://creativecommons.org/licenses/by-sa/3.0/" target="_blank" rel="noopener">CC BY-SA 3.0</a>。SVGの原本は改変せず取得します。</p></section></main><script>
+'use strict';const $=id=>document.getElementById(id),NS='http://www.w3.org/2000/svg';let strokes=[],current=null,paths=[],sourceUrl='',sourceText='',selectedStep=0,ready=false,loadSerial=0,sourceMode='';const canvas=$('ink'),ctx=canvas.getContext('2d');const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));function code(ch){return ch.codePointAt(0).toString(16).padStart(5,'0')}function refresh(){ctx.clearRect(0,0,600,600);for(let i=0;i<strokes.length;i++)draw(strokes[i],'#2459b5');if(current)draw(current,'#2459b5')}function draw(pts,color){if(!pts.length)return;ctx.strokeStyle=color;ctx.lineWidth=7;ctx.lineCap='round';ctx.lineJoin='round';ctx.beginPath();ctx.moveTo(pts[0].x,pts[0].y);for(let p of pts.slice(1))ctx.lineTo(p.x,p.y);ctx.stroke()}function pos(e){let r=canvas.getBoundingClientRect();return {x:(e.clientX-r.left)*600/r.width,y:(e.clientY-r.top)*600/r.height,t:Date.now(),pressure:e.pressure??0}}canvas.addEventListener('pointerdown',e=>{if(!ready)return;e.preventDefault();canvas.setPointerCapture(e.pointerId);current=[pos(e)];refresh()});canvas.addEventListener('pointermove',e=>{if(!current)return;e.preventDefault();let p=pos(e),q=current.at(-1);if(Math.hypot(p.x-q.x,p.y-q.y)>.5)current.push(p);refresh()});function end(e){if(!current)return;e.preventDefault();if(current.length)strokes.push(current);current=null;refresh();$('result').textContent=`入力：${strokes.length}画 / お手本：${paths.length}画`};canvas.addEventListener('pointerup',end);canvas.addEventListener('pointercancel',end);
+function renderGuide(){let svg=$('guide');svg.replaceChildren();svg.style.visibility=$('hideguide').checked?'hidden':'visible';paths.forEach((p,i)=>{if(selectedStep!==0&&i>=selectedStep)return;let clone=p.cloneNode(true);clone.removeAttribute('id');clone.setAttribute('fill','none');clone.setAttribute('stroke',selectedStep===0?'#c1c9d7':i===selectedStep-1?'#e35a43':'#c1c9d7');clone.setAttribute('stroke-width','3.2');clone.setAttribute('stroke-linecap','round');clone.setAttribute('stroke-linejoin','round');svg.appendChild(clone)});$('step').textContent=ready?(selectedStep===0?'全画':`${selectedStep} / ${paths.length}画目`):'未取得'}function reset(){strokes=[];current=null;refresh();$('result').textContent='お手本の読み込み後に書いてください。'}function showOfflineHelp(){let ch=$('char').value, filename=code(ch)+'.svg';$('offlinehelp').innerHTML=`現在の「${esc(ch)}」の公式ファイル：<a href="https://github.com/KanjiVG/kanjivg/blob/master/kanji/${filename}" target="_blank" rel="noopener">${filename} をGitHubで開く</a>。GitHubの「Download raw file」から保存し、上の欄で選択してください。複数のSVGをまとめて選択することもできます。`}
+function applySVG(xml, url, mode){let doc=new DOMParser().parseFromString(xml,'image/svg+xml');if(doc.querySelector('parsererror'))throw Error('SVG解析失敗');let all=[...doc.getElementsByTagNameNS('http://www.w3.org/2000/svg','path')];let matched=all.filter(p=>/-s[0-9]+$/.test(p.getAttribute('id')||''));if(!matched.length)throw Error('KanjiVGの筆画パスが見つかりません');matched.sort((a,b)=>Number(a.getAttribute('id').match(/-s(\d+)$/)[1])-Number(b.getAttribute('id').match(/-s(\d+)$/)[1]));let ids=matched.map(p=>Number(p.getAttribute('id').match(/-s(\d+)$/)[1]));if(ids.some((v,i)=>v!==i+1))throw Error('筆画番号に欠番・重複があります');paths=matched.map(p=>p.cloneNode(true));sourceText=xml;sourceUrl=url;sourceMode=mode;ready=true;$('judge').disabled=false;$('status').textContent=`読み込み成功：${$('char').value} / ${paths.length}画（KanjiVG SVG・${mode}）`;$('source').textContent=`出典：KanjiVG / ${url} / 読み込み日時：${new Date().toLocaleString('ja-JP')}`;renderGuide()}
+async function load(){let token=++loadSerial;ready=false;paths=[];selectedStep=0;reset();renderGuide();let ch=$('char').value;let url=`https://raw.githubusercontent.com/KanjiVG/kanjivg/master/kanji/${code(ch)}.svg`;sourceUrl=url;$('status').textContent='KanjiVG公式データを取得中…';$('source').textContent='';$('judge').disabled=true;showOfflineHelp();try{let response=await fetch(url,{cache:'no-store'});if(!response.ok)throw Error('HTTP '+response.status);let xml=await response.text();if(token!==loadSerial)return;applySVG(xml,url,'オンライン')}catch(err){if(token!==loadSerial)return;paths=[];ready=false;$('status').textContent='オンライン取得に失敗しました：'+err.message+'\n下の公式SVGリンクから保存し、「ファイルから読み込む」で指定してください。';$('source').textContent='通信できない場合も、ローカルの公式SVGを利用できます。';renderGuide()}}
+$('svgfile').addEventListener('change',async e=>{let files=[...e.target.files];if(!files.length)return;let expected=code($('char').value)+'.svg';let f=files.find(f=>f.name.toLowerCase()===expected);if(!f){$('status').textContent=`選択中の漢字「${$('char').value}」に対応する ${expected} がありません。`;return}++loadSerial;ready=false;paths=[];try{applySVG(await f.text(),`KanjiVG/kanji/${f.name}`,'ローカルファイル')}catch(err){$('status').textContent='SVGを読み込めません：'+err.message;$('judge').disabled=true;ready=false}});
+
+function resample(a,n=24){if(a.length<2)return Array(n).fill(a[0]||{x:0,y:0});let lens=[0];for(let i=1;i<a.length;i++)lens.push(lens.at(-1)+Math.hypot(a[i].x-a[i-1].x,a[i].y-a[i-1].y));let total=lens.at(-1);if(!total)return Array(n).fill(a[0]);let out=[];for(let k=0;k<n;k++){let d=total*k/(n-1),i=1;while(i<lens.length-1&&lens[i]<d)i++;let f=(d-lens[i-1])/(lens[i]-lens[i-1]||1);out.push({x:a[i-1].x+(a[i].x-a[i-1].x)*f,y:a[i-1].y+(a[i].y-a[i-1].y)*f})}return out}function normalize(arr){let p=arr.flat(),xs=p.map(q=>q.x),ys=p.map(q=>q.y),minx=Math.min(...xs),miny=Math.min(...ys),scale=Math.max(Math.max(...xs)-minx,Math.max(...ys)-miny,1);return arr.map(s=>s.map(q=>({x:(q.x-minx)/scale,y:(q.y-miny)/scale})))}function reference(){let svg=$('guide');let tmp=document.createElementNS(NS,'svg');tmp.setAttribute('viewBox','0 0 109 109');tmp.style.cssText='position:absolute;width:1px;height:1px;opacity:0;pointer-events:none';document.body.appendChild(tmp);let out=[];for(let p of paths){let q=p.cloneNode(true);tmp.appendChild(q);let len=q.getTotalLength(),pts=[];for(let k=0;k<24;k++){let t=q.getPointAtLength(len*k/23);pts.push({x:t.x,y:t.y})}out.push(pts);q.remove()}tmp.remove();return out}function score(a,b){let s=0;for(let i=0;i<a.length;i++)for(let j=0;j<a[i].length;j++)s+=Math.hypot(a[i][j].x-b[i][j].x,a[i][j].y-b[i][j].y);return s/(a.length*a[0].length)}// Each reference stroke is extracted from KanjiVG SVG; no manually-authored kanji facts.
+function strokeDistance(a,b){let sum=0;for(let j=0;j<a.length;j++)sum+=Math.hypot(a[j].x-b[j].x,a[j].y-b[j].y);return sum/a.length}
+function assignment(cost){let n=cost.length;if(n>12)return null; // Avoid exponential work on complex characters.
+ let states=new Map([[0,{total:0,order:[]}]]);
+ for(let i=0;i<n;i++){let next=new Map();for(let [mask,entry] of states){for(let j=0;j<n;j++){if(mask&(1<<j))continue;let m=mask|(1<<j),v=entry.total+cost[i][j],old=next.get(m);if(!old||v<old.total)next.set(m,{total:v,order:[...entry.order,j]})}}states=next}
+ return states.get((1<<n)-1)
+}
+
+// v1.7: reference-path deviations, endpoints, curvature, coverage and global tilt.
+// All geometry derives from KanjiVG SVG paths. These are heuristic coaching metrics.
+function bounds(arr){const pts=arr.flat();return {minX:Math.min(...pts.map(p=>p.x)),maxX:Math.max(...pts.map(p=>p.x)),minY:Math.min(...pts.map(p=>p.y)),maxY:Math.max(...pts.map(p=>p.y))}}
+function frame(arr,b){const w=Math.max(1,b.maxX-b.minX),h=Math.max(1,b.maxY-b.minY),d=Math.hypot(w,h);return arr.map(st=>st.map(p=>({x:(p.x-b.minX)/d,y:(p.y-b.minY)/d}))) }
+function dist(p,q){return Math.hypot(p.x-q.x,p.y-q.y)}
+function chordDeviation(st){const a=st[0],b=st.at(-1),dx=b.x-a.x,dy=b.y-a.y,l=Math.hypot(dx,dy);if(l<.015)return 0;return st.reduce((v,p)=>v+Math.abs(dx*(p.y-a.y)-dy*(p.x-a.x))/l,0)/st.length}
+function pathMetric(a,b){let sum=0,max=0;for(let j=0;j<a.length;j++){let d=dist(a[j],b[j]);sum+=d;max=Math.max(max,d)}return {mean:sum/a.length,max}}
+function coverage(a,b,tol=.035){let miss=0,run=0,longest=0;for(const p of b){let d=Math.min(...a.map(q=>dist(p,q)));if(d>tol){miss++;run++;longest=Math.max(longest,run)}else run=0}return {missing:miss/b.length,longest:longest/b.length}}
+function components(st){let v=0,h=0;for(let j=1;j<st.length;j++){let dx=st[j].x-st[j-1].x,dy=st[j].y-st[j-1].y;if(Math.abs(dy)>Math.abs(dx)*1.2)v+=Math.abs(dy);if(Math.abs(dx)>Math.abs(dy)*1.2)h+=Math.abs(dx)}return {vertical:v,horizontal:h}}
+function shapeAdvice(input,ref,ordered,best){
+ const prefix='字形のヒント（実験中）：';
+ if(!best||!best.order.every((j,i)=>i===j))return prefix+'筆画の対応が不確かなため、字形の助言を保留します。';
+ if(input.length!==ref.length||!input.length)return prefix+'画数が一致したときに表示します。';
+ const bb=bounds(ref),a=frame(input,bounds(input)),b=frame(ref,bb);
+ // Shape-only normalized comparison; independently retain position on original canvas.
+ const ar=frame(input,bb),issues=[],details=[];
+ for(let i=0;i<a.length;i++){
+  const st=a[i],rt=b[i],path=pathMetric(st,rt),start=dist(st[0],rt[0]),end=dist(st.at(-1),rt.at(-1));
+  const curved=Math.max(0,chordDeviation(st)-chordDeviation(rt));
+  const cov=coverage(st,rt),cA=components(st),cB=components(rt);
+  const vertRatio=cA.vertical/Math.max(cB.vertical,.005);
+  const startDelta={x:st[0].x-rt[0].x,y:st[0].y-rt[0].y};
+  const endDelta={x:st.at(-1).x-rt.at(-1).x,y:st.at(-1).y-rt.at(-1).y};
+  const va={x:st.at(-1).x-st[0].x,y:st.at(-1).y-st[0].y},vb={x:rt.at(-1).x-rt[0].x,y:rt.at(-1).y-rt[0].y};
+  const angle=Math.atan2(va.x*vb.y-va.y*vb.x,va.x*vb.x+va.y*vb.y);
+  details.push({i,path,start,end,curved,cov,vertRatio,startDelta,endDelta,angle});
+  // Curvature is prioritized when endpoints are close and the middle deviates.
+  if(curved>.028&&path.max>.065)issues.push({i,kind:'curve',strength:curved*4+path.max});
+  // Missing reference coverage is a candidate only; large displacement can mimic a gap.
+  if(cov.longest>.30&&path.mean>.055&&curved<.025)issues.push({i,kind:'missing',strength:cov.longest*.22});
+  if(cB.vertical>.11&&vertRatio<.70)issues.push({i,kind:'verticalShort',strength:(.70-vertRatio)*.5});
+  if(start>.09&&end<.075)issues.push({i,kind:'start',strength:start});
+  if(end>.09&&start<.075)issues.push({i,kind:'end',strength:end});
+  if(path.mean>.085)issues.push({i,kind:'path',strength:path.mean});
+ }
+ const tilted=details.filter(d=>Math.abs(d.angle)>.34),sign=tilted.reduce((v,d)=>v+Math.sign(d.angle),0);
+ if(tilted.length>=2&&Math.abs(sign)>=2&&tilted.length>=Math.ceil(details.length*.6))return prefix+'じ ぜんたいが ななめに なっているようだよ。せんの むきと バランスを たしかめよう。';
+ const curves=issues.filter(q=>q.kind==='curve');
+ if(curves.length){const nums=[...new Set(curves.map(q=>q.i+1))].slice(0,2).map(n=>n+'かくめ').join('と');return prefix+nums+'の せんが とちゅうで おおきく まがっているようだよ。おてほんの せんの かたちを たしかめよう。'}
+ // A high start and similar end on two mostly vertical strokes means start higher.
+ const high=details.filter(d=>d.startDelta.y>.07&&Math.abs(d.endDelta.y)<.075&&d.vertRatio<.83);
+ if(high.length>=2)return prefix+high.slice(0,2).map(d=>(d.i+1)+'かくめ').join('と')+'の たての せんを、もうすこし うえから かきはじめよう。';
+ const vs=issues.filter(q=>q.kind==='verticalShort');
+ if(vs.length>=2)return prefix+vs.slice(0,2).map(q=>(q.i+1)+'かくめ').join('と')+'の たての せんが みじかいようだよ。かきはじめる ばしょを たしかめよう。';
+ const missing=issues.filter(q=>q.kind==='missing');
+ if(missing.length&&details[missing[0].i].path.max>.10)return prefix+(missing[0].i+1)+'かくめに、おてほんの せんが たりない ぶぶんが あるかもしれないよ。とちゅうで とぎれていないか たしかめよう。';
+ if(issues.length){issues.sort((x,y)=>y.strength-x.strength);const q=issues[0],d=details[q.i],num=q.i+1;
+  if(q.kind==='start')return prefix+num+'かくめの かきはじめる ばしょを、おてほんと くらべよう。';
+  if(q.kind==='end')return prefix+num+'かくめの かきおわる ばしょを、おてほんと くらべよう。';
+  if(q.kind==='verticalShort')return prefix+num+'かくめの たての ぶぶんを、もうすこし ながくしてみよう。';
+  return prefix+num+'かくめの とちゅうの せんを、おてほんと くらべてみよう。';
+ }
+ if(ordered<=.075)return prefix+'おてほんに ちかい かたちで かけたね！';
+ return prefix+'おてほんと くらべて、じ ぜんたいの バランスを たしかめよう。';
+}
+function deviationReport(input,ref){
+ const a=frame(input,bounds(input)),b=frame(ref,bounds(ref));let lines=['【お手本からの乖離（試験値）】'];
+ for(let i=0;i<a.length;i++){const p=pathMetric(a[i],b[i]),c=coverage(a[i],b[i]);lines.push(`${i+1}画目：始点 ${Math.round(dist(a[i][0],b[i][0])*100)} / 終点 ${Math.round(dist(a[i].at(-1),b[i].at(-1))*100)} / 途中 ${Math.round(p.mean*100)} / 最大 ${Math.round(p.max*100)} / 欠損候補 ${Math.round(c.missing*100)}%`)}
+ return lines.join('\n')+'\n※距離は文字サイズで正規化した比較値×100。欠損候補には位置ずれも含まれるため、欠損確定ではありません。';
+}
+
+const candidateChars=['山','口','日','一','十','川','土','士'];
+const candidateCache=new Map();
+async function candidateReference(ch){
+ if(candidateCache.has(ch))return candidateCache.get(ch);
+ let xml;
+ if(ch===$('char').value&&ready)xml=sourceText;
+ else {let r=await fetch(`https://raw.githubusercontent.com/KanjiVG/kanjivg/master/kanji/${code(ch)}.svg`);if(!r.ok)throw Error('候補 '+ch+' を取得できません');xml=await r.text()}
+ let doc=new DOMParser().parseFromString(xml,'image/svg+xml');
+ let ps=[...doc.getElementsByTagNameNS(NS,'path')].filter(x=>/-s[0-9]+$/.test(x.getAttribute('id')||''));
+ ps.sort((a,b)=>Number(a.id.match(/-s(\d+)$/)[1])-Number(b.id.match(/-s(\d+)$/)[1]));
+ let svg=document.createElementNS(NS,'svg');svg.style.cssText='position:absolute;width:1px;height:1px;opacity:0;pointer-events:none';document.body.appendChild(svg);
+ let out=[];
+ try{for(let path of ps){let q=path.cloneNode(true);svg.appendChild(q);let len=q.getTotalLength(),pts=[];for(let i=0;i<24;i++){let v=q.getPointAtLength(len*i/23);pts.push({x:v.x,y:v.y})}out.push(pts);q.remove()}}finally{svg.remove()}
+ candidateCache.set(ch,out);return out;
+}
+async function recognize(){
+ if(!strokes.length){$('result').textContent='まず漢字を書いてください。';return}
+ $('judge').disabled=true;$('result').textContent='複数の漢字と比較しています…';
+ try{
+  const input=normalize(strokes.map(p=>resample(p)));
+  let ranks=[],fail=[];
+  for(let ch of candidateChars){try{let ref=await candidateReference(ch);if(ref.length!==input.length)continue;let b=normalize(ref),distance=score(input,b);ranks.push({ch,distance})}catch(e){fail.push(ch)}}
+  ranks.sort((a,b)=>a.distance-b.distance);
+  if(!ranks.length){$('result').textContent='比較できる候補がありません。通信を確認して再度お試しください。';return}
+  let first=ranks[0],second=ranks[1],target=ranks.find(x=>x.ch===$('char').value),gap=second?second.distance-first.distance:Infinity;
+  let decision,reason;
+  if(!target){decision='✏️ もういちど かいてみよう';reason='出題字と画数が一致しないか、比較できませんでした。'}
+  else if(first.distance>.22){decision='✏️ もういちど かいてみよう';reason='どの候補とも十分に近くありません。'}
+  else if(gap<.035){decision='✏️ もういちど かいてみよう';reason='上位候補の距離が近いため、まだ区別できません。'}
+  else if(first.ch!==$('char').value){decision='❌ ちがう字かもしれないよ';reason='出題字より別の字に近い筆跡です。'}
+  else {decision='⭕️ せいかい！';reason='出題字が最も近く、2位との差もあります。'}
+  let report=`${decision}\n${reason}\n出題：${$('char').value} / 最も近い候補：${first.ch}\n`;
+  report+='候補ランキング（形状距離・小さいほど近い）：\n'+ranks.slice(0,5).map((r,i)=>`${i+1}位 ${r.ch} ${r.distance.toFixed(3)}`).join('\n');
+  if(target)report+=`\n出題字との距離：${target.distance.toFixed(3)}`;
+  if(second)report+=`\n1位と2位の差：${gap.toFixed(3)}`;
+  report+='\n※試験的な8字限定の比較です。画数が異なる漢字はランキングに含めません。正解を保証する認識モデルではありません。';
+  if(fail.length)report+='\n読み込めなかった候補：'+fail.join('、');
+  $('result').textContent=report;
+ }catch(e){$('result').textContent='文字識別でエラー：'+e.message}
+ finally{$('judge').disabled=!ready}
+}
+function judge(){
+ if(!ready){$('result').textContent='外部データが未取得のため判定できません。';return}
+ let n=strokes.length,m=paths.length;
+ let s=`画数：入力 ${n}画 / KanjiVG ${m}画 → ${n===m?'一致':'不一致'}`;
+ if(n===m&&n){try{
+  let input=strokes.map(p=>resample(p)),ref=reference();
+  let a=normalize(input),b=normalize(ref);
+  let cost=a.map(x=>b.map(y=>strokeDistance(x,y)));
+  let ordered=cost.reduce((sum,row,i)=>sum+row[i],0)/n;
+  let best=assignment(cost);
+  s+=`\n筆順どおりの形状距離：${ordered.toFixed(3)}（小さいほど近い）`;
+  if(best){let bestDist=best.total/n,identity=best.order.every((j,i)=>j===i);
+   s+=`\n筆画の最適対応：${best.order.map(j=>j+1).join(' → ')}（KanjiVGの画番号）`;
+   s+=`\n最適対応での形状距離：${bestDist.toFixed(3)}`;
+   if(identity)s+='\n筆順の参考結果：お手本と同じ順番が最も近い（暫定）';
+   else s+='\n筆順の参考結果：お手本とは異なる順番のほうが近い（筆順違いの可能性）';
+  }else{s+='\n筆順の参考結果：画数が多いため詳細比較を保留';}
+  s+='\n'+shapeAdvice(input,ref,ordered,best);
+  s+='\n'+deviationReport(input,ref);
+  s+='\n※形状・筆順・字形のヒントは研究用の参考表示です。正誤・合否の判定には使用しません。';
+ }catch(e){s+='\n形状・筆順比較は実行できませんでした：'+e.message}}
+ if(n!==m)s+='\n字形のヒント：画数が一致したときに表示します。';s+='\n文字認識：未実装（正しい漢字かどうかは未判定）';$('result').textContent=s
+}
+function exportJSON(){let data={schema:'kanji-beta-external-v1',target:$('char').value,createdAt:new Date().toISOString(),source:{name:'KanjiVG',url:sourceUrl,mode:sourceMode,loaded:ready,referenceStrokeCount:ready?paths.length:null},canvas:{width:600,height:600},diagnostic:$('result').textContent,strokes};let blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'}),u=URL.createObjectURL(blob),a=document.createElement('a');a.href=u;a.download=`kanji-beta-${code(data.target)}-${Date.now()}.json`;a.click();setTimeout(()=>URL.revokeObjectURL(u),1000)}$('hideguide').onchange=renderGuide;$('char').onchange=load;$('reload').onclick=load;$('prev').onclick=()=>{selectedStep=Math.max(0,selectedStep-1);renderGuide()};$('next').onclick=()=>{selectedStep=Math.min(paths.length,selectedStep+1);renderGuide()};$('all').onclick=()=>{selectedStep=0;renderGuide()};$('undo').onclick=()=>{strokes.pop();refresh();$('result').textContent=`入力：${strokes.length}画 / お手本：${paths.length}画`};$('clear').onclick=reset;$('judge').onclick=recognize;$('export').onclick=exportJSON;$('import').onchange=async e=>{let f=e.target.files[0];if(!f)return;try{let d=JSON.parse(await f.text());if(!Array.isArray(d.strokes))throw Error('筆跡データがありません');if(d.target!==$('char').value){$('char').value=d.target;await load()}strokes=d.strokes;refresh();$('result').textContent='JSONを読み込みました。判定ボタンで再評価できます。'}catch(err){$('result').textContent='読み込み失敗：'+err.message}e.target.value=''};load();</script></body></html>
