@@ -31,7 +31,7 @@ const api='https://api.github.com/repos/'+owner+'/'+repo;
 const status=document.getElementById('status');
 const actions=document.getElementById('actions');
 const options=document.getElementById('options');
-const ignore=/^(?:index\.html|404\.html)$/i;
+const ignore=/^(?:index\.html|404\.html)$/;
 function isGame(path){return /\.html?$/i.test(path)&&!ignore.test(path)&&!/(?:back[\s_-]*up|backup)/i.test(path)}
 function gameUrl(path,sha){return base+path.split('/').map(encodeURIComponent).join('/')+'?rev='+encodeURIComponent(sha||Date.now().toString())}
 async function readJson(url){
