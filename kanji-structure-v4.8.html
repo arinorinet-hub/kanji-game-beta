@@ -1,0 +1,733 @@
+<!doctype html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>漢字ゲームβ v4.8｜類似漢字の構造差検証</title><style>
+:root{font-family:system-ui,-apple-system,'Yu Gothic',sans-serif;color:#1b2c44;background:#f5f7fb}*{box-sizing:border-box}main{max-width:760px;margin:auto;padding:16px}h1{font-size:1.4rem}h2{font-size:1.1rem}.card{background:white;padding:16px;border-radius:14px;margin:14px 0;box-shadow:0 2px 12px #0001}.controls{display:flex;gap:9px;align-items:center;flex-wrap:wrap}button,select,input{font:inherit}button,select{padding:10px 14px;border:1px solid #afbdd1;border-radius:10px;background:white;color:#183254}button.primary{background:#2459b5;color:white;border-color:#2459b5}.pad{position:relative;width:min(100%,510px);aspect-ratio:1;margin:14px auto;border:2px solid #c0cfe4;border-radius:12px;overflow:hidden;background:linear-gradient(90deg,transparent 49.85%,#e8edf5 50%,transparent 50.15%),linear-gradient(transparent 49.85%,#e8edf5 50%,transparent 50.15%),white}.pad canvas{width:100%;height:100%;touch-action:none;display:block}.muted{color:#64748b;font-size:.9rem}#result{white-space:pre-wrap;background:#eef4fb;border-radius:10px;padding:14px;line-height:1.7}#result[data-kind="ok"],#result[data-kind="advice"]{background:#edf8f0}#result[data-kind="retry"]{background:#fff7e9}#result[data-kind="wrong_structure"]{background:#fff0f0;border:2px solid #d51f37;color:#961b29}#result[data-kind="uncertain"]{background:#eff2f7}.badge{display:inline-block;border-radius:20px;background:#e4ecfa;padding:4px 9px;font-size:.8rem}label{display:inline-flex;align-items:center;gap:6px}li{margin:5px 0}a{color:#2459b5}.order-alert{margin-top:12px;padding:14px 16px;border:2px solid #cbd5e1;border-radius:12px;background:#f1f5f9;color:#475569;line-height:1.65}.order-alert[hidden]{display:none}.order-alert[data-status="different"]{background:#fff0f0;border-color:#d51f37;color:#a51025}.order-alert[data-status="different"] strong{color:#a51025;font-size:1.08rem}.order-alert[data-status="ok"]{background:#effaf1;border-color:#4f9c65;color:#206337}.order-alert[data-status="uncertain"]{background:#f5f6f8;border-color:#9ca3af;color:#475569}#metrics{font-size:.86rem;white-space:pre-wrap;color:#475569}.practice{margin-top:12px;padding:14px;border:2px solid #cbd5e1;border-radius:12px;background:#f8fafc}.practice[hidden]{display:none}.practice.success{border-color:#31965d;background:#e9fbef;color:#145b32}.practice button{margin-top:10px}.practice .primary{background:#2459b5;color:white} .practice-status{font-weight:700}.generic{margin-top:18px;padding:14px;border:1px solid #b9cadc;border-radius:12px;background:#f8fbff}.generic h2{margin-top:0}.generic-stats{font-size:.9rem;line-height:1.8}.candidate{display:flex;gap:8px;align-items:center;margin:7px 0}.candidate .glyph{font-size:1.35rem;min-width:2rem;text-align:center}.candidate .track{flex:1;min-width:55px;background:#e2e8f0;border-radius:20px;height:10px;overflow:hidden}.candidate .fill{height:100%;background:#5b88bc}.candidate .score{font-variant-numeric:tabular-nums;min-width:45px;text-align:right}.candidate.target{font-weight:700}.candidate.target .fill{background:#2563eb}#generic-raw{white-space:pre-wrap;overflow-wrap:anywhere;font-size:.77rem}.batch-report{margin-top:10px;max-height:360px;overflow:auto}.batch-report table{border-collapse:collapse;width:100%;font-size:.84rem}.batch-report th,.batch-report td{border-bottom:1px solid #ddd;padding:6px;text-align:left}.batch-report th{position:sticky;top:0;background:white} .contrast{margin-top:18px;padding:15px;border:1px solid #a9b8c9;border-radius:12px;background:#fafcff}.contrast h2{margin:0 0 8px}.contrast-result{padding:12px;border-radius:10px;border:1px solid #cbd5e1;background:#f4f6f8;margin-top:10px;line-height:1.65}.contrast-result[data-status="supports"]{border-color:#60a576;background:#eef9f0;color:#155d32}.contrast-result[data-status="opposes"]{border-color:#d94a53;background:#fff1f2;color:#8d1d27}.contrast-result[data-status="uncertain"]{border-color:#b6a57e;background:#fffbeb;color:#69531c}.contrast-result[data-status="not_applicable"]{color:#64748b}.contrast summary{cursor:pointer}.contrast dl{display:grid;grid-template-columns:6em 1fr;gap:7px 10px;font-size:.9rem}.contrast dt{font-weight:bold}.contrast dd{margin:0}.source-note{font-size:.84rem;color:#64748b}.contrast code{font-size:.85rem} .learning{margin-top:14px;padding:14px;border:2px solid #9daac0;border-radius:12px;background:#f8fafc;line-height:1.65}.learning[hidden]{display:none}.learning[data-status="redo"]{background:#fff6ea;border-color:#c97920}.learning[data-status="success"]{background:#e8f8ed;border-color:#328655}.learning[data-status="repeat"]{background:#fff1f1;border-color:#ce4754}.learning button{margin-top:9px}.learning .strong{font-weight:700}.learning .meta{font-size:.86rem;color:#475569} </style></head><body><main>
+<h1>漢字ゲームβ v4.8 <span class="badge">21文字・共通幾何と重ね書きを解析</span></h1>
+<p class="muted"><b>①文字としての正誤</b>、<b>②書写の改善ヒント</b>、<b>③書き順の確認</b> を別々に表示します。<b>土・士・山・十・口・川・未・末・日・目・田・回・国・間・道</b> の既存判定に加えて、全21文字に同一の汎用比較を適用します。文化庁の指針に沿った正式な採点ではなく、筆跡の構造から判定する研究用の試作機です。</p>
+<section class="card"><div class="controls"><label>出題 <select id="target"><option>土</option><option>士</option><option>山</option><option>十</option><option>口</option><option>川</option><option>未</option><option>末</option><option>日</option><option>目</option><option>田</option><option>回</option><option>国</option><option>間</option><option>問</option><option>聞</option><option>道</option><option>話</option><option>有</option><option>明</option><option>万</option></select></label><button id="clear">消す</button><button id="undo">一画戻す</button></div><div class="pad"><canvas id="pad" width="600" height="600" aria-label="漢字を手書きする場所"></canvas></div><div class="controls"><button id="judge" class="primary">構造で判定</button><button id="save">JSONを保存</button></div><p id="result" aria-live="polite">まず文字を選び、書いて「構造で判定」を押してください。</p><div id="learning" class="learning" hidden aria-live="polite"><div id="learning-message"></div><div class="controls"><button id="learning-redo" class="primary">もう一度書く</button><button id="learning-cancel">練習を終了</button></div></div><div id="order-alert" class="order-alert" role="status" aria-live="polite" hidden></div><div id="practice" class="practice" aria-live="polite" hidden><div id="practice-text" class="practice-status"></div><div class="controls"><button id="practice-start" class="primary" hidden>正しい書き順でもう一度書く</button><button id="practice-cancel" hidden>練習を終了</button></div></div><p class="muted">※v4.8では全21字に共通の独立横線・縦線・重ね書き候補を測定し、文字全体の強い構造矛盾を画数より先に検出し、「問・間・聞」の共通部品解析を行います。線の重ね書きだけで別字とは断定しません。また「日・目」に加え、「問・間・聞」の内側の口・日・耳を共通の方法で調べます。文字の画数だけで構造分類を打ち切らず、まず内側の部品を確認します。「目」の2本の線が重なっている場合は誤字と断定せず、間隔を空けた書き直しへ誘導します。独立した横線の本数が明確に違い、重なりがない場合は字形の間違いを示します。対象外の漢字では自動検出したと表示しません。「問・間」は信頼できる部品一致と標準画数を満たせば正解とします。「聞」は門＋耳の部品構造を試験判定します。部品を確実に抽出できない場合は判定保留です。「話・有・明・万」は引き続き判定保留です。下の汎用比較では21文字を同じ手順で比較します。類似度や順位は試験的な数値であり、正誤の確定判定ではありません。</p><section class="generic" aria-labelledby="generic-title"><h2 id="generic-title">④ 全文字共通・汎用形状比較 <span class="badge">実験中</span></h2><p class="muted">手書きを大きさで正規化し、日本語フォントの文字形との距離を比較します。画数・方向・接続の統計も、21文字すべて同じ処理で計測します。<b>字体差・個人差があるため、順位や点数だけで合否を決めません。</b></p><p id="generic-status" aria-live="polite">書いた後に「構造で判定」を押すと、汎用比較も実行します。</p><div id="generic-stats" class="generic-stats"></div><div id="generic-candidates"></div><details><summary>共通特徴量と21字すべての比較を見る</summary><pre id="generic-raw"></pre></details></section><section class="contrast" aria-labelledby="contrast-title"><h2 id="contrast-title">⑤ 根拠付き類似漢字辞書 <span class="badge">v4.8実験</span></h2><p class="muted">全ての対象漢字に同じ幾何測定を適用し、<b>類似字の区別に役立つ構造差</b>を確認します。対象は「土・士」「未・末」（明確な構造違いは❌）（明確な逆転は❌）「日・目」「問・間」に加え「聞」の門＋耳の部品検査です。3字のどれを出題しても、内側が口・日・耳のどれかを共通の手順で解析します。</p><div id="contrast-result" class="contrast-result" aria-live="polite">対象の漢字を選び、書いて判定してください。</div><details open><summary>類似漢字の判別条件と根拠を表示</summary><div id="contrast-dictionary"></div></details><p class="source-note">文化庁の2016年指針は字体と手書きの許容範囲についての公的資料です。ここで使う<b>線長比などのしきい値は本アプリの試験的設定であり、公的な採点数値ではありません。</b>「日・目」の内横線数も構造資料と筆画から設定した試験条件です。</p><p class="source-note">参考：<a target="_blank" rel="noopener" href="https://www.bunka.go.jp/seisaku/bunkashingikai/kokugo/hokoku/joyokanjihyo_shosekikanko.html">文化庁「常用漢字表の字体・字形に関する指針」</a> ／ <a target="_blank" rel="noopener" href="https://kanjivg.tagaini.net/">KanjiVG</a>（将来の構造データ候補。<b>この版にKanjiVGのSVGデータは組み込んでいません</b>）</p></section><details><summary>従来の構造判定の数値を見る</summary><pre id="metrics"></pre></details></section>
+<section class="card"><h2>以前の版に戻る</h2><p class="muted">v2.3〜v3.8は変更していません。いつでも元の判定に戻れます。</p><p><a href="./kanji-structure-v3.8.html">v3.8を開く</a> ／ <a href="./kanji-structure-v3.7.html">v3.7を開く</a> ／ <a href="./kanji-structure-v3.6.html">v3.6を開く</a> ／ <a href="./kanji-structure-v3.5.html">v3.5を開く</a> ／ <a href="./kanji-structure-v3.4.html">v3.4を開く</a> ／ <a href="./kanji-structure-v3.3.html">v3.3を開く</a> ／ <a href="./kanji-structure-v3.2.html">v3.2を開く</a> ／ <a href="./kanji-structure-v3.1.html">v3.1を開く</a> ／ <a href="./kanji-structure-v3.0.html">v3.0を開く</a> ／ <a href="./kanji-structure-v2.9.html">v2.9を開く</a> ／ <a href="./kanji-structure-v2.7.html">v2.7を開く</a> ／ <a href="./kanji-structure-v2.5.html">v2.5を開く</a> ／ <a href="./kanji-structure-v2.4.html">v2.4を開く</a> ／ <a href="./kanji-structure-v2.3.html">v2.3を開く</a></p></section>
+<section class="card"><h2>過去の筆跡でも再判定できます</h2><p class="muted">以前のバージョンで保存したJSONを選ぶと、同じ筆跡をこの新方式で評価します。画面内で処理し、サーバーには送信しません。</p><input type="file" id="import" accept=".json,application/json"><p class="muted">複数ファイルを一度に比較する場合はこちら：</p><input type="file" id="batch-import" accept=".json,application/json" multiple><div id="batch-report" class="batch-report" aria-live="polite"></div></section>
+<section class="card muted"><b>試作機の仕様</b><ul><li>土・士：画数、横・縦・横の方向、2か所の交差、横線の長さの大小、上下配置を検査</li><li>山：左の縦・折れ・右の縦の構成、縦部分の相対長、下側のつながり、異常な曲がりを検査</li><li>十：2画の交差と位置を確認</li><li>口：左縦・上から右へ折れる画・下横の3画と四隅のつながりを確認</li><li>川：3本の縦画の左右順序と長さを確認</li><li>未・末：5画の構造、横画の長短、縦画の交差、左右の払いを確認</li><li>日・目：4画／5画の違い、囲み、内部の横画の本数と配置を確認</li><li>田：5画、囲みと縦横の仕切りを確認</li><li>回：6画、外側と内側の二重囲みを確認</li><li>国：8画、玉の縦線・横線・点を線の方向と大きさから識別して確認</li><li>間：12画、門の位置と内側の日の基本構造を確認（先行判定）</li><li>問：11画、門と口の抽出が確実で構造・画数が一致すれば正解、内側の線が不明確なら保留</li><li>聞：14画、門＋耳を共通の外枠・内側部品で検査。6画の耳について横・縦の配置を実験的に確認し、確証がない場合は保留</li><li>道：12画、首の内部構造としんにょうの伸びを確認（先行判定）</li><li>話・有・明・万：α時代に読み取りが難しかった文字です。v4.8では画の座標と方向を記録し、合否は判定保留とします</li><li>全21文字共通：方向・折れ・画数・交差近似・独立横線段・縦線列・重ね書き候補・字形全体の縦横比を抽出し、日本語フォントの字形と双方向距離で比較します。印刷字体への近さは漢字としての正解と同義ではありません</li><li>字形・構成を最優先し、画数・検査可能な書き順も書き直し判定に反映します。未検証の筆順は暫定合格と区別します</li><li>漢字認識AIではありません。字形比較は閲覧環境の日本語フォントに依存し、十分な字形正誤の精度評価や1,026字への一般化は未実装</li></ul><p>線の交差には折れ線の距離を用い、わずかな隙間には文字サイズに比例した許容幅を設定しています。</p></section>
+</main><script>
+'use strict';const $=s=>document.getElementById(s);let strokes=[],cur=null,lastReport='';const cvs=$('pad'),ctx=cvs.getContext('2d');const len=(a,b)=>Math.hypot(a.x-b.x,a.y-b.y);const clamp=(x,a,b)=>Math.max(a,Math.min(b,x));
+function point(e){let b=cvs.getBoundingClientRect();return{x:(e.clientX-b.left)*600/b.width,y:(e.clientY-b.top)*600/b.height,t:Date.now(),pressure:e.pressure??0}}
+function paint(){ctx.clearRect(0,0,600,600);ctx.lineWidth=7;ctx.lineCap=ctx.lineJoin='round';ctx.strokeStyle='#2459b5';for(let s of [...strokes,...(cur?[cur]:[])]){if(!s.length)continue;ctx.beginPath();ctx.moveTo(s[0].x,s[0].y);for(let q of s.slice(1))ctx.lineTo(q.x,q.y);ctx.stroke()}}
+cvs.addEventListener('pointerdown',e=>{e.preventDefault();cvs.setPointerCapture(e.pointerId);cur=[point(e)];paint()});cvs.addEventListener('pointermove',e=>{if(!cur)return;e.preventDefault();let p=point(e);if(len(p,cur[cur.length-1])>=1)cur.push(p);paint()});function end(e){if(!cur)return;e.preventDefault();strokes.push(cur);cur=null;paint();$('result').textContent=`${strokes.length}画を書きました。構造で判定できます。`;delete $('result').dataset.kind;$('order-alert').hidden=true}cvs.addEventListener('pointerup',end);cvs.addEventListener('pointercancel',end);
+function resample(s,n=55){if(s.length<2)return Array(n).fill(s[0]);let ds=[0];for(let i=1;i<s.length;i++)ds.push(ds[i-1]+len(s[i],s[i-1]));let out=[],k=1;for(let i=0;i<n;i++){let t=ds.at(-1)*i/(n-1);while(k<ds.length-1&&ds[k]<t)k++;let f=(t-ds[k-1])/(ds[k]-ds[k-1]||1);out.push({x:s[k-1].x*(1-f)+s[k].x*f,y:s[k-1].y*(1-f)+s[k].y*f})}return out}
+const bounds=s=>{let p=s.flat(),xs=p.map(q=>q.x),ys=p.map(q=>q.y);return {xmin:Math.min(...xs),xmax:Math.max(...xs),ymin:Math.min(...ys),ymax:Math.max(...ys)}};
+function bstroke(s){let x=s.map(p=>p.x),y=s.map(p=>p.y);return{xmin:Math.min(...x),xmax:Math.max(...x),ymin:Math.min(...y),ymax:Math.max(...y),w:Math.max(...x)-Math.min(...x),h:Math.max(...y)-Math.min(...y),cx:(Math.max(...x)+Math.min(...x))/2,cy:(Math.max(...y)+Math.min(...y))/2}}
+function segdist(p,a,b){let dx=b.x-a.x,dy=b.y-a.y,t=clamp(((p.x-a.x)*dx+(p.y-a.y)*dy)/(dx*dx+dy*dy||1),0,1);return len(p,{x:a.x+t*dx,y:a.y+t*dy})}
+function mindist(a,b){let d=Infinity;for(let p of a)for(let i=1;i<b.length;i++)d=Math.min(d,segdist(p,b[i-1],b[i]));for(let p of b)for(let i=1;i<a.length;i++)d=Math.min(d,segdist(p,a[i-1],a[i]));return d}
+function vertPart(s){let b=bstroke(s);let pts=s.filter(p=>p.y<=b.ymin+b.h*.4);return {height:b.h,top:b.ymin,low:b.ymax}}
+function check(st,target){let data={target,strokes:st.length,checks:[],warnings:[],advice:[],metrics:{}};let bad=x=>data.checks.push(x),warn=x=>data.warnings.push(x),advise=x=>data.advice.push(x);const pilot=['話','有','明','万','問','聞'].includes(target);const needed=({十:2,未:5,末:5,日:4,目:5,田:5,回:6,国:8,間:12,問:11,聞:14,道:12,話:13,有:6,明:8,万:3})[target]||3;
+if(pilot){
+ const all=bounds(st),W=Math.max(all.xmax-all.xmin,1),H=Math.max(all.ymax-all.ymin,1);
+ const ratios=st.map(x=>{const b=bstroke(x);return b.w>Math.max(b.h*1.5,6)?'横':b.h>Math.max(b.w*1.5,6)?'縦':'折れ・斜め・点'});
+ data.metrics={全体幅:Math.round(W),全体高さ:Math.round(H),記録した画数:st.length,参考画数:needed,画の方向分類:ratios.join(' / ')};
+ warn('「'+target+'」は汎用構造判定の検証対象です。部品の違いは⑤で確認しますが、全体の字形の合否はまだ判定保留です。');
+ if(st.length!==needed)warn('参考画数は'+needed+'画です。今回の入力は'+st.length+'画でした（この差だけで不正解にはしません）。');
+ return {...data,kind:'uncertain'};
+}
+if(st.length!==needed)if(st.length!==needed){bad(`${needed}画の漢字ですが、入力は${st.length}画です。`);return {...data,kind:'retry'}}
+const bb=bounds(st),W=Math.max(bb.xmax-bb.xmin,1),H=Math.max(bb.ymax-bb.ymin,1),scale=Math.max(W,H),s=st.map(x=>resample(x)),b=s.map(bstroke),d=(i,j)=>mindist(s[i],s[j])/scale;const dx=i=>s[i].at(-1).x-s[i][0].x,dy=i=>s[i].at(-1).y-s[i][0].y;data.metrics={全体幅:Math.round(W),全体高さ:Math.round(H)};
+if(['田','回','国','間','問','聞','道'].includes(target)){
+ // Version 2.8: component-level checks; order assessment separate from identity.
+ const G=(i,j)=>Number(d(i,j).toFixed(3)), inside=(part,container,margin=.15)=>part.cx>container.xmin-margin*scale&&part.cx<container.xmax+margin*scale&&part.cy>container.ymin-margin*scale&&part.cy<container.ymax+margin*scale;
+ const subset=ids=>bstroke(ids.flatMap(i=>s[i]));
+ if(target==='田'){
+  // First two strokes enclose top and sides, third vertical partition, fourth horizontal partition, fifth bottom.
+  const frame=subset([0,1,4]); const vi=b[2].h/Math.max(b[2].w,1)>=b[3].h/Math.max(b[3].w,1)?2:3,hi=vi===2?3:2,v=b[vi],h=b[hi];
+  data.metrics={...data.metrics,囲み横幅比:Number((frame.w/W).toFixed(2)),内部縦画長さ比:Number((v.h/H).toFixed(2)),内部横画長さ比:Number((h.w/W).toFixed(2)),縦横交差距離:G(vi,hi)};
+  if(b[0].h<b[0].w*1.2)bad('1画目の左側が縦画になっていません。');
+  if(b[1].w<W*.53||b[1].h<H*.52)bad('2画目の上辺から右辺への折れが不足しています。');
+  if(b[4].w<W*.5||b[4].h>b[4].w*.7)bad('5画目の下辺が不足しています。');
+  if(v.h<H*.35||v.w>v.h*.65)bad('内部の縦の仕切りが不足しています。');
+  if(h.w<W*.36||h.h>h.w*.7)bad('内部の横の仕切りが不足しています。');
+  if(!inside(v,frame)||!inside(h,frame))bad('内部の仕切りが囲みから外れています。');
+  if(d(vi,hi)>.16)bad('内部の縦横の仕切りが離れすぎています。');
+  else if(d(vi,hi)>.075)advise('中央の縦横を少し近づけると整います。');
+  if(d(0,4)>.23||d(1,4)>.23)bad('下辺と左右の辺が大きく離れています。');
+ }else if(target==='回'){
+  const outer=subset([0,1,5]),inner=subset([2,3,4]);
+  data.metrics={...data.metrics,内側の幅比:Number((inner.w/W).toFixed(2)),内側の高さ比:Number((inner.h/H).toFixed(2)),内外の中心距離:Number(Math.hypot(inner.cx-outer.cx,inner.cy-outer.cy)/scale).toFixed(3)};
+  if(b[0].h<b[0].w*1.2||b[1].w<W*.55||b[1].h<H*.55||b[5].w<W*.5)bad('外側の囲みの基本形が不足しています。');
+  if(b[2].h<b[2].w*1.1||b[3].w<inner.w*.6||b[3].h<inner.h*.5||b[4].w<inner.w*.55)bad('内側の口の基本形が不足しています。');
+  if(inner.w<.19*W||inner.h<.19*H)bad('内側の口が極端に小さいです。');
+  if(inner.xmin<outer.xmin+.035*W||inner.xmax>outer.xmax-.035*W||inner.ymin<outer.ymin+.035*H||inner.ymax>outer.ymax-.035*H)bad('内側の口が外枠の外にはみ出しています。');
+  if(d(2,4)>.24||d(3,4)>.24)advise('内側の口の角を少し近づけると整います。');
+ }else if(target==='国'){
+  // Outside 1,2,8; inside 玉 3..7. Classify inner strokes by direction rather than mistaken fixed indices.
+  const outer=subset([0,1,7]),inner=subset([2,3,4,5,6]);
+  const horizontals=[2,3,4,5,6].filter(i=>b[i].w>Math.max(b[i].h*1.6,W*.18));
+  const verticals=[2,3,4,5,6].filter(i=>b[i].h>Math.max(b[i].w*1.6,H*.22));
+  const dots=[2,3,4,5,6].filter(i=>b[i].w<W*.22&&b[i].h<H*.20);
+  data.metrics={...data.metrics,内側の幅比:Number((inner.w/W).toFixed(2)),内側の高さ比:Number((inner.h/H).toFixed(2)),玉の横画数:horizontals.length,玉の縦画数:verticals.length,玉の点の候補数:dots.length};
+  if(b[0].h<b[0].w*1.2||b[1].w<W*.55||b[1].h<H*.55||b[7].w<W*.5)bad('外側の囲みの基本形が不足しています。');
+  if(horizontals.length<3||verticals.length<1||dots.length<1)bad('内側の玉に必要な横画3本・縦画1本・点が検出できません。');
+  if(horizontals.length>=3){const hs=[...horizontals].sort((i,j)=>b[i].cy-b[j].cy).slice(0,3);if(b[hs[2]].cy-b[hs[0]].cy<H*.16)bad('玉の3本の横線が上下に十分分かれていません。');}
+  if(verticals.length&&horizontals.length){const v=verticals[0];if(horizontals.filter(i=>d(i,v)<.17).length<2)bad('玉の横線と縦線の交差が不足しています。');}
+  if(inner.xmin<outer.xmin-.07*W||inner.xmax>outer.xmax+.07*W||inner.ymin<outer.ymin-.07*H||inner.ymax>outer.ymax+.07*H)bad('内側の玉が外枠から大きくはみ出しています。');
+  if(dots.length){const dot=dots.reduce((a,i)=>b[i].w*b[i].h<b[a].w*b[a].h?i:a,dots[0]);if(b[dot].cx<inner.xmin+.20*inner.w||b[dot].cx>inner.xmax+.95*inner.w)advise('玉の点の位置を見直すと、より整います。');}
+ }else if(target==='間'){
+  // Gate strokes 1..8 and 日 strokes 9..12 (left vertical, upper/right fold, center, bottom).
+  const gate=subset([0,1,2,3,4,5,6,7]),sun=subset([8,9,10,11]);
+  data.metrics={...data.metrics,門の幅比:Number((gate.w/W).toFixed(2)),日の幅比:Number((sun.w/W).toFixed(2)),日の高さ比:Number((sun.h/H).toFixed(2))};
+  if(gate.w<W*.54||gate.h<H*.48)bad('門の外形が極端に小さいです。');
+  if(sun.w<W*.15||sun.h<H*.15)bad('内部の日が極端に小さいです。');
+  if(sun.cx<gate.xmin-.1*W||sun.cx>gate.xmax+.1*W||sun.cy<gate.ymin-.1*H||sun.cy>gate.ymax+.1*H)bad('日が門から大きく外れています。');
+  if(b[8].h<sun.h*.55||b[9].w<sun.w*.70||b[9].h<sun.h*.60||b[10].w<sun.w*.48||b[11].w<sun.w*.48)bad('内部の「日」の縦・折れ・横画の構造が不足しています。');
+  if(b[0].h<H*.42||b[5].h<H*.47||b[5].cx<gate.cx+.13*W)bad('門の左右の縦画の配置が不足しています。');
+  if(sun.w>gate.w*.83||sun.h>gate.h*.89)advise('門と日の間に少し余白を作ると整います。');
+  // Full gate stroke geometry is not yet confirmed across different writers.
+  if(!data.checks.length)warn('門の細かな折れ・書風の違いは追加検証中です。現段階では基本構造を確認しました。');
+ }else if(target==='道'){
+  const head=subset([0,1,2,3,4,5,6,7,8]),walk=subset([9,10,11]),eye=subset([4,5,6,7,8]);
+  data.metrics={...data.metrics,首の幅比:Number((head.w/W).toFixed(2)),しんにょうの幅比:Number((walk.w/W).toFixed(2)),しんにょうの下端比:Number(((walk.ymax-bb.ymin)/H).toFixed(2)),首の目の幅比:Number((eye.w/W).toFixed(2))};
+  if(head.w<W*.22||head.h<H*.22)bad('首の部分が極端に小さいです。');
+  if(walk.w<W*.3||walk.h<H*.3)bad('しんにょうの大きさが不足しています。');
+  if(walk.ymax<head.ymax-.20*H)bad('しんにょうが首の下側に届いていません。');
+  if(walk.xmin>head.cx+.15*W)bad('しんにょうが首の左側から大きく離れています。');
+  if(b[4].h<eye.h*.50||b[5].w<eye.w*.70||b[5].h<eye.h*.55||b[6].w<eye.w*.42||b[7].w<eye.w*.42||b[8].w<eye.w*.42)bad('首の内側の「目」の構造が不足しています。');
+  if(b[11].w<W*.60)bad('しんにょうの最後の長い横方向の払いが不足しています。');
+  if(!data.checks.length)warn('首の上部としんにょうの曲がり方は追加検証中です。現段階では基本構造を確認しました。');
+ }
+}else if(target==='未'||target==='末'){
+ // Stroke order: top horizontal, second horizontal, central vertical, left sweep, right sweep.
+ const top=b[0],low=b[1],v=b[2],left=b[3],right=b[4],ratio=top.w/Math.max(low.w,1);
+ data.metrics={...data.metrics,上横対下横の長さ比:Number(ratio.toFixed(2)),上横と縦画の距離:Number(d(0,2).toFixed(3)),下横と縦画の距離:Number(d(1,2).toFixed(3))};
+ for(let i of [0,1]){if(b[i].w<b[i].h*1.4)bad(`${i+1}画目は横線として書いてください。`);}
+ if(top.cy>low.cy-.075*scale)bad('2本の横線の上下関係が不明瞭です。');
+ if(v.h<v.w*1.35)bad('3画目は中央の縦画として書いてください。');
+ for(let i of [0,1]){if(d(i,2)>.15)bad(`${i+1}画目の横線と中央の縦画が大きく離れています。`);else if(d(i,2)>.06)advise(`${i+1}画目の横線と縦画をもう少し近づけると整います。`)}
+ if(v.cx<Math.min(top.xmin,low.xmin)-.07*scale||v.cx>Math.max(top.xmax,low.xmax)+.07*scale)bad('中央の縦画の位置が横線からずれています。');
+ if(dx(3)>-.1*scale||dy(3)<.1*scale)bad('4画目は左下へ払う形にしてください。');
+ if(dx(4)<.1*scale||dy(4)<.1*scale)bad('5画目は右下へ払う形にしてください。');
+ if(Math.min(d(2,3),d(1,3))>.22)bad('左払いが中央部分から大きく離れています。');
+ if(Math.min(d(2,4),d(1,4))>.22)bad('右払いが中央部分から大きく離れています。');
+ if(target==='未'){
+  if(ratio>1.22)bad('上の横線が下よりかなり長く、「末」に近い形です。');
+  else if(ratio>.92)warn('横線の長さが近く、「未」と「末」の区別が曖昧です。');
+ }else{
+  if(ratio<.82)bad('下の横線が上よりかなり長く、「未」に近い形です。');
+  else if(ratio<1.12)warn('横線の長さが近く、「末」と「未」の区別が曖昧です。');
+ }
+}else if(target==='日'||target==='目'){
+ // 1: left vertical, 2: top horizontal and right vertical, interior strokes, last: bottom horizontal.
+ const left=s[0],fold=s[1],last=st.length-1,base=s[last],a=left[0],z=left.at(-1),c0=fold[0],c1=fold.at(-1),bot0=base[0],bot1=base.at(-1);
+ const gap=(p,q)=>len(p,q)/scale,innerCount=target==='目'?2:1;
+ data.metrics={...data.metrics,左上接続距離:Number(gap(a,c0).toFixed(3)),左下接続距離:Number(gap(z,bot0).toFixed(3)),右下接続距離:Number(gap(c1,bot1).toFixed(3)),内部横画数:innerCount};
+ if(b[0].h<b[0].w*1.4)bad('1画目は左の縦線として書いてください。');
+ if(b[1].w<W*.57||b[1].h<H*.60)bad('2画目の上から右下への折れが不足しています。');
+ if(c0.x>b[1].xmin+.25*W||c0.y>b[1].ymin+.25*H)bad('2画目は左上から右へ進み、右下へ折れてください。');
+ if(c1.x<b[1].xmax-.27*W||c1.y<b[1].ymax-.28*H)bad('2画目の右への折れが不明瞭です。');
+ if(b[last].w<W*.55||b[last].w<b[last].h*1.5||dx(last)<.3*W)bad('最後の画は下側の横線として書いてください。');
+ for(let i=2;i<last;i++){
+  if(b[i].w<W*.43||b[i].w<b[i].h*1.4)bad(`${i+1}画目は内部の横線として書いてください。`);
+  if(b[i].cy<b[1].ymin+.13*H||b[i].cy>b[last].cy-.09*H)bad(`${i+1}画目の内部の横線が囲みの外側にあります。`);
+  let leftEdge=Math.min(b[0].cx,b[1].xmin),rightEdge=b[1].xmax;
+  if(b[i].xmax<leftEdge+.43*W||b[i].xmin>rightEdge-.43*W)bad(`${i+1}画目の内部の横線の位置がずれています。`);
+ }
+ if(target==='目'&&b[2].cy>b[3].cy-.08*H)bad('「目」の2本の内部横線が近すぎます。');
+ if(b[last].cy<b[1].ymin+.55*H)bad('囲みの下側の位置が高すぎます。');
+ for(const [name,g] of [['左上',gap(a,c0)],['左下',gap(z,bot0)],['右下',gap(c1,bot1)]]){
+  if(g>.22)bad(`${name}の角が大きく離れています。`);else if(g>.12)advise(`${name}の角をもう少し近づけると整います。`)
+ }
+}else if(target==='十'){
+ const cross=d(0,1);data.metrics={...data.metrics,交差距離:Number(cross.toFixed(3))};
+ if(b[0].w<b[0].h*1.5)bad('1画目は横線として書いてください。');
+ if(b[1].h<b[1].w*1.5)bad('2画目は縦線として書いてください。');
+ if(cross>.12)bad('横線と縦線が大きく離れています。');else if(cross>.045)advise('横線と縦線をもう少し近づけましょう。');
+ if(b[1].cx<b[0].xmin+.18*b[0].w||b[1].cx>b[0].xmax-.18*b[0].w)bad('縦線が横線の端に寄りすぎています。');
+ if(b[0].cy<b[1].ymin+.12*b[1].h||b[0].cy>b[1].ymax-.12*b[1].h)bad('横線が縦線の端に寄りすぎています。');
+ }else if(target==='川'){
+ const widths=b.map(x=>x.w/Math.max(x.h,1)),heights=b.map(x=>x.h/H);data.metrics={...data.metrics,縦画長さ比:heights.map(x=>Number(x.toFixed(2))),横ぶれ比:widths.map(x=>Number(x.toFixed(2)))};
+ for(let i=0;i<3;i++){if(widths[i]>.48)bad(`${i+1}画目が縦方向になっていません。`);if(heights[i]<.30)bad(`${i+1}画目が極端に短く、川の縦画として認めにくいです。`);else if(heights[i]<.46)advise(`${i+1}画目を少し長くすると整います。`);}
+ if(!(b[0].cx<b[1].cx&&b[1].cx<b[2].cx))bad('3本の縦線を左から右の順に並べてください。');
+ if(Math.min(b[1].cx-b[0].cx,b[2].cx-b[1].cx)<W*.12)bad('縦線同士が近すぎます。');
+ if(Math.max(...b.map(x=>x.ymax))-Math.min(...b.map(x=>x.ymax))>H*.36)advise('3本の下端の高さをもう少しそろえると整います。');
+ }else if(target==='口'){
+ // Stroke 1: left down, stroke 2: top right then down, stroke 3: bottom right.
+ const left=s[0],corner=s[1],bottom=s[2],a=left[0],z=left.at(-1),c0=corner[0],c1=corner.at(-1),bot0=bottom[0],bot1=bottom.at(-1);
+ const tol=.085*scale;const gap=(p,q)=>len(p,q)/scale;const leftH=b[0].h/H,rightH=b[1].h/H;
+ data.metrics={...data.metrics,左縦長さ比:Number(leftH.toFixed(2)),右側の縦方向比:Number(rightH.toFixed(2)),右上折れ画の幅比:Number((b[1].w/W).toFixed(2)),左下接続距離:Number(gap(z,bot0).toFixed(3)),右下接続距離:Number(gap(c1,bot1).toFixed(3)),左上接続距離:Number(gap(a,c0).toFixed(3))};
+ if(b[0].h<b[0].w*1.45)bad('1画目の左側を縦方向に書いてください。');
+ if(b[1].w<W*.58||b[1].h<H*.55)bad('2画目の上側から右下への折れが不足しています。');
+ if(b[2].w<b[2].h*1.8||b[2].w<W*.55)bad('3画目の下の横線が短すぎるか、横方向になっていません。');
+ // Validate corner direction: start at upper left and travel right then down.
+ if(c0.x>b[1].xmin+.2*W||c0.y>b[1].ymin+.2*H)bad('2画目は左上から右へ進み、下へ折れてください。');
+ if(c1.x<b[1].xmax-.22*W||c1.y<b[1].ymax-.2*H)bad('2画目の右下への折れが不明瞭です。');
+ if(bot0.x>bot1.x||b[2].cy<b[0].ymin+.48*H)bad('3画目を下側に左から右へ書いてください。');
+ for(const [name,g] of [['左上',gap(a,c0)],['左下',gap(z,bot0)],['右下',gap(c1,bot1)]]){if(g>.19)bad(`${name}の角が大きく離れていて、囲みが成立しにくいです。`);else if(g>.115)advise(`${name}の角をもう少しつなげると整います。`)}
+ if(b[1].xmax-b[0].cx<W*.4)bad('四角形の横幅が不足しています。');
+ }else if(target==='土'||target==='士'){
+ const r=b[2].w/Math.max(b[0].w,1);data.metrics={...data.metrics,上下横線長さ比:Number(r.toFixed(2)),上横線と縦線の最短距離:Number(d(0,1).toFixed(3)),下横線と縦線の最短距離:Number(d(1,2).toFixed(3))};
+ if(Math.abs(dx(0))<b[0].h*1.3 || Math.abs(dx(2))<b[2].h*1.3)bad('横線が横方向になっていません。');
+ if(b[1].h<b[1].w*1.4)bad('2画目の縦線が縦方向になっていません。');
+ if(b[0].cy>b[2].cy-.08*scale)bad('上下の横線の位置関係が不明瞭です。');
+ if(d(0,1)>.12)bad('上の横線と縦線が大きく離れています。');else if(d(0,1)>.045)advise('上の横線と縦線をもう少し近づけると、より整った字になります。');
+ if(d(1,2)>.12)bad('下の横線と縦線が大きく離れています。');else if(d(1,2)>.045)advise('下の横線と縦線をもう少し近づけると、より整った字になります。');
+ const top=b[0].cy,bot=b[2].cy;if(b[1].ymax<bot-.13*scale)bad('縦線が下の横線まで大きく届いていません。');else if(b[1].ymax<bot-.04*scale)advise('縦線を下の横線まで少し長くすると、より整った字になります。');
+ if(b[1].ymin>top+.13*scale)bad('縦線が上の横線まで大きく届いていません。');else if(b[1].ymin>top+.04*scale)advise('縦線を上の横線まで少し伸ばすと、より整った字になります。');
+ if(target==='土'){if(r<.85)bad('下の横線が上よりかなり短く、「士」に近い形です。');else if(r<1.08)warn('上下の横線の長さが近く、「土」と「士」の区別が曖昧です。')}
+ else {if(r>1.17)bad('下の横線が上より長く、「土」に近い形です。');else if(r>.93)warn('上下の横線の長さが近く、「士」と「土」の区別が曖昧です。')}
+ // Contact should occur near the interior of the horizontal strokes rather than at their extreme ends.
+ for(let i of [0,2]){let v=b[1].cx;if(v<b[i].xmin-.065*scale||v>b[i].xmax+.065*scale)bad(`${i+1}画目の横線と縦線の左右位置がずれています。`)}
+}else if(target==='山'){
+ const ratio2=b[1].h/H,ratio3=b[2].h/H,ratio1=b[0].w/Math.max(b[0].h,1);data.metrics={...data.metrics,'2画目の縦方向の広がり':Number(ratio2.toFixed(2)),'3画目の縦方向の広がり':Number(ratio3.toFixed(2)),'1画目の横ぶれ比':Number(ratio1.toFixed(2)),'1・2画目の距離':Number(d(0,1).toFixed(3)),'2・3画目の距離':Number(d(1,2).toFixed(3))};
+ if(b[0].h<H*.35)bad('1画目の縦方向の長さが短すぎます。');
+ if(ratio1>.33)bad('1画目が横方向に大きく曲がっています。');else if(ratio1>.22)advise('1画目が少し横方向に曲がっています。');
+ if(b[1].w<W*.48)bad('2画目の横方向の部分が短すぎます。');
+ if(ratio2<.18)bad('2画目の縦方向の部分が極端に短いです。');else if(ratio2<.26)advise('2画目の縦方向の部分が短めです。');
+ if(ratio3<.20)bad('3画目の縦線が極端に短いです。');else if(ratio3<.27)advise('3画目の縦線が短めです。');
+ if(b[2].h<b[2].w*1.3)bad('3画目が縦線になっていません。');
+ if(d(0,1)>.09)bad('左の部分と下側が離れています。');
+ if(d(1,2)>.09)bad('右の部分と下側が離れています。');
+ if(b[2].cx<b[0].cx+.34*W)bad('右の縦線が左に寄りすぎています。');
+ if(b[0].ymax<b[1].ymax-.12*H||b[2].ymax<b[1].ymax-.12*H)bad('下側の線が適切につながっていません。');
+}
+return {...data,kind:data.checks.length?'retry':data.warnings.length?'uncertain':data.advice.length?'advice':'ok'} }
+function assessStrokeOrder(st,target){
+ const res={status:'not_checked',message:'この字の書き順はまだ検証対象外です。',details:[]};
+ if(target!=='国')return res;
+ if(st.length!==8)return {status:'uncertain',message:'画数が8画でないため、書き順を確実には比較できません。',details:[]};
+ const b=st.map(x=>bstroke(resample(x))),W=Math.max(...b.map(x=>x.xmax))-Math.min(...b.map(x=>x.xmin)),H=Math.max(...b.map(x=>x.ymax))-Math.min(...b.map(x=>x.ymin));
+ const horiz=i=>b[i].w>Math.max(b[i].h*1.6,W*.18),dot=i=>b[i].w<W*.22&&b[i].h<H*.20;
+ if(horiz(5)&&dot(6))return {status:'partial_ok',message:'6画目は「玉」の下の横線、7画目は右下の点です。基本筆順どおりです。',details:[]};
+ if(dot(5)&&horiz(6))return {status:'different',message:'6画目と7画目の順番が逆になっています。標準的な筆順では、6画目が「玉」の下の横線、7画目が右下の点です。',details:['6画目：点（標準では下の横線）','7画目：下の横線（標準では点）']};
+ return {status:'uncertain',message:'6・7画目を点と横線に確実には分類できなかったため、書き順を判定保留にしました。',details:[]};
+}
+// v4.8: common geometry; no per-character identity thresholds.
+const GENERIC_TARGETS=['土','士','山','十','口','川','未','末','日','目','田','回','国','間','問','聞','道','話','有','明','万'];
+const EXPECTED_COUNTS={土:3,士:3,山:3,十:2,口:3,川:3,未:5,末:5,日:4,目:5,田:5,回:6,国:8,間:12,問:11,聞:14,道:12,話:13,有:6,明:8,万:3};
+const GRID=80, INK_PAD=7;
+function makeRaster(st){
+ const raster=new Uint8Array(GRID*GRID);if(!st.length)return raster;
+ const q=bounds(st),w=Math.max(1,q.xmax-q.xmin),h=Math.max(1,q.ymax-q.ymin),scale=(GRID-2*INK_PAD)/Math.max(w,h),sx=(GRID-w*scale)/2,sy=(GRID-h*scale)/2;
+ const dot=(x,y)=>{for(let oy=-1;oy<=1;oy++)for(let ox=-1;ox<=1;ox++){let xx=Math.round(x)+ox,yy=Math.round(y)+oy;if(xx>=0&&xx<GRID&&yy>=0&&yy<GRID)raster[yy*GRID+xx]=1}};
+ for(const stroke of st){if(!stroke.length)continue;let before=stroke[0];dot(sx+(before.x-q.xmin)*scale,sy+(before.y-q.ymin)*scale);
+ for(const p of stroke.slice(1)){let x1=sx+(before.x-q.xmin)*scale,y1=sy+(before.y-q.ymin)*scale,x2=sx+(p.x-q.xmin)*scale,y2=sy+(p.y-q.ymin)*scale,n=Math.max(1,Math.ceil(Math.hypot(x2-x1,y2-y1)*1.8));for(let i=0;i<=n;i++)dot(x1+(x2-x1)*i/n,y1+(y2-y1)*i/n);before=p;}}
+ return raster;
+}
+const fontRasterCache=new Map();
+function glyphRaster(ch){
+ if(fontRasterCache.has(ch))return fontRasterCache.get(ch);
+ const canvas=document.createElement('canvas');canvas.width=canvas.height=144;let c=canvas.getContext('2d',{willReadFrequently:true});
+ c.fillStyle='#fff';c.fillRect(0,0,144,144);c.fillStyle='#000';c.font='112px "Noto Sans CJK JP", "Hiragino Kaku Gothic ProN", "Yu Gothic", sans-serif';c.textAlign='center';c.textBaseline='middle';c.fillText(ch,72,75);
+ let img=c.getImageData(0,0,144,144).data,minx=144,maxx=-1,miny=144,maxy=-1;
+ for(let y=0;y<144;y++)for(let x=0;x<144;x++){let k=4*(y*144+x);if(img[k]<155){minx=Math.min(minx,x);maxx=Math.max(maxx,x);miny=Math.min(miny,y);maxy=Math.max(maxy,y)}}
+ const result=new Uint8Array(GRID*GRID);if(maxx>=minx){let w=maxx-minx+1,h=maxy-miny+1,scale=(GRID-2*INK_PAD)/Math.max(w,h),sx=(GRID-w*scale)/2,sy=(GRID-h*scale)/2;
+ for(let y=miny;y<=maxy;y++)for(let x=minx;x<=maxx;x++){let k=4*(y*144+x);if(img[k]<155){let xx=Math.round(sx+(x-minx)*scale),yy=Math.round(sy+(y-miny)*scale);if(xx>=0&&xx<GRID&&yy>=0&&yy<GRID)result[yy*GRID+xx]=1;}}}
+ fontRasterCache.set(ch,result);return result;
+}
+function distanceField(raster){let d=new Float32Array(GRID*GRID);for(let i=0;i<d.length;i++)d[i]=raster[i]?0:1e4;const k=Math.SQRT2;
+ for(let y=0;y<GRID;y++)for(let x=0;x<GRID;x++){let i=y*GRID+x;if(x)d[i]=Math.min(d[i],d[i-1]+1);if(y)d[i]=Math.min(d[i],d[i-GRID]+1);if(x&&y)d[i]=Math.min(d[i],d[i-GRID-1]+k);if(x<GRID-1&&y)d[i]=Math.min(d[i],d[i-GRID+1]+k)}
+ for(let y=GRID-1;y>=0;y--)for(let x=GRID-1;x>=0;x--){let i=y*GRID+x;if(x<GRID-1)d[i]=Math.min(d[i],d[i+1]+1);if(y<GRID-1)d[i]=Math.min(d[i],d[i+GRID]+1);if(x<GRID-1&&y<GRID-1)d[i]=Math.min(d[i],d[i+GRID+1]+k);if(x&&y<GRID-1)d[i]=Math.min(d[i],d[i+GRID-1]+k)}return d;}
+const glyphFieldCache=new Map();
+function rasterSimilarity(sample,sampleField,ch){const font=glyphRaster(ch);let ff=glyphFieldCache.get(ch);if(!ff){ff=distanceField(font);glyphFieldCache.set(ch,ff)}let d1=0,n1=0,d2=0,n2=0;for(let i=0;i<sample.length;i++){if(sample[i]){d1+=Math.min(ff[i],10);n1++}if(font[i]){d2+=Math.min(sampleField[i],10);n2++}}
+ if(!n1||!n2)return 0;let mean=(d1/n1+d2/n2)/2;return Math.max(0,Math.min(100,Math.round(100*Math.exp(-mean/3.6))));}
+function commonFeatures(st){if(!st.length)return null;let bb=bounds(st),w=Math.max(1,bb.xmax-bb.xmin),h=Math.max(1,bb.ymax-bb.ymin),s=st.map(v=>resample(v,24)),bs=s.map(bstroke),cats={horizontal:0,vertical:0,diagonalOrBend:0},contact=0,pairs=0;
+ bs.forEach(b=>{if(b.w>b.h*1.8)cats.horizontal++;else if(b.h>b.w*1.8)cats.vertical++;else cats.diagonalOrBend++});for(let i=0;i<s.length;i++)for(let j=i+1;j<s.length;j++){pairs++;if(mindist(s[i],s[j])/Math.max(w,h)<.07)contact++}
+ let grid=makeRaster(st),distance=distanceField(grid),rank=GENERIC_TARGETS.map(ch=>({kanji:ch,similarity:rasterSimilarity(grid,distance,ch),strokeCount:EXPECTED_COUNTS[ch]})).sort((a,b)=>b.similarity-a.similarity);
+ return {method:'normalized_bidirectional_chamfer_v1',source:'browser_japanese_font',scoreMeaning:'Font similarity only; not a handwriting correctness probability',strokeCount:st.length,aspectRatio:Number((w/h).toFixed(3)),width:Math.round(w),height:Math.round(h),directionCounts:cats,nearContactPairs:contact,totalStrokePairs:pairs,ranking:rank};
+}
+let lastCommon=null;
+function renderCommon(g,target){lastCommon=g;let status=$('generic-status'),stat=$('generic-stats'),candidates=$('generic-candidates');if(!g){status.textContent='線を書いて判定してください。';stat.textContent='';candidates.replaceChildren();$('generic-raw').textContent='';return;}
+ let pos=g.ranking.findIndex(c=>c.kanji===target),self=g.ranking[pos];status.textContent=`指定した「${target}」の印刷字形との近さ：${self.similarity}/100（21文字中${pos+1}位）。この点数は正解率ではありません。`;
+ let d=g.directionCounts;stat.textContent=`共通特徴：${g.strokeCount}画／幅÷高さ ${g.aspectRatio}／横 ${d.horizontal}・縦 ${d.vertical}・折れ等 ${d.diagonalOrBend}／近接する画の組 ${g.nearContactPairs}`;
+ candidates.replaceChildren();const picked=g.ranking.slice(0,5);if(!picked.some(c=>c.kanji===target))picked.push(self);
+ for(const item of picked){let row=document.createElement('div');row.className='candidate'+(item.kanji===target?' target':'');let glyph=document.createElement('span');glyph.className='glyph';glyph.textContent=item.kanji;let bar=document.createElement('div');bar.className='track';let fill=document.createElement('div');fill.className='fill';fill.style.width=item.similarity+'%';bar.append(fill);let label=document.createElement('span');label.className='score';label.textContent=item.similarity+'/100';row.append(glyph,bar,label);candidates.append(row)}
+ $('generic-raw').textContent=JSON.stringify(g,null,2);
+}
+
+
+// v4.8 evidence-aware contrast rules. All measured thresholds below are experimental, not official.
+const CONTRAST_DICTIONARY=[
+ {id:'tsuchi-shi',chars:['土','士'],feature:'upper_lower_horizontal_length',label:'上下の横画の長さ',origin:'文化庁の字体・字形の考え方を参照。横線の相対長はアプリで定義した試験的判別条件',note:'単独字の比較。ほかの漢字の構成要素では同じ厳格条件を適用しない。',source:'https://www.bunka.go.jp/seisaku/bunkashingikai/kokugo/hokoku/joyokanjihyo_shosekikanko.html'},
+ {id:'mi-sue',chars:['未','末'],feature:'upper_lower_horizontal_length',label:'上下の横画の長さ',origin:'文化庁の字体・字形の考え方を参照。横線の相対長はアプリで定義した試験的判別条件',note:'左右の払いとの接続や位置も重要。線長だけを採点の唯一条件にしない。',source:'https://www.bunka.go.jp/seisaku/bunkashingikai/kokugo/hokoku/joyokanjihyo_shosekikanko.html'},
+ {id:'hi-me',chars:['日','目'],feature:'interior_horizontal_count',label:'囲み内部の横画の本数',origin:'字形の構造解析から設定した実験条件（この項目は文化庁が数値判別基準として定めたものではない）',note:'日：内横画1本、目：内横画2本。囲みの上下辺とは分けて数える。',source:'https://www.bunka.go.jp/seisaku/bunkashingikai/kokugo/hokoku/joyokanjihyo_shosekikanko.html'},
+ {id:'mon-kan',chars:['問','間'],feature:'nested_component_inner_bar',label:'門の内側の口・日・耳を共通認識',origin:'共通筆画・部品解析から推定した試験条件。文科省・文化庁が数値基準を指定したものではない',note:'外側の門（先頭8画）と内側の囲み部品を分離。問は口、間は日、聞は耳を共通の幾何条件で区別。部品が不確実なら保留。',source:'https://kanjivg.tagaini.net/'},
+ {id:'mon-ear',chars:['聞'],feature:'nested_component_ear',label:'門の内側の口・日・耳を共通認識',origin:'KanjiVGの一般的な部品構造を参考にした試験的な幾何解析。SVGデータ自体は組み込んでいない',note:'外側の門を先頭8画と仮定し、内側の耳の横・縦画を画数不一致でも調査。部品構造の差と重なり、枠外の筆画を区別する試験方式。',source:'https://kanjivg.tagaini.net/'}
+];
+// For 日/目, measure structural lines even when pen-down count differs.
+// Counts of independently separated interior horizontals are distinct from raw strokes.
+function interiorHorizontalEvidence(st){
+ if(st.length<3)return {reliable:false,reason:'筆跡が少なく囲みを検証できません。'};
+ const bb=bounds(st),W=Math.max(1,bb.xmax-bb.xmin),H=Math.max(1,bb.ymax-bb.ymin);
+ const bs=st.map(x=>bstroke(resample(x,32)));
+ // Confirm the frame from first two strokes; do not force a judgment if it is uncertain.
+ const left=bs[0],corner=bs[1];
+ const frameOK=left.h>H*.53&&corner.w>W*.53&&corner.h>H*.48;
+ // A candidate horizontal must lie well inside the visible frame, not the top or bottom border.
+ const candidates=bs.map((b,i)=>({...b,i})).filter(b=>iPlus(b,bs,W,H));
+ function iPlus(b,arr,width,height){return b.i>=2&&b.w>Math.max(width*.40,b.h*1.8)&&b.cy>bb.ymin+height*.18&&b.cy<bb.ymax-height*.17;}
+ candidates.sort((a,b)=>a.cy-b.cy);
+ const groups=[];
+ for(const line of candidates){
+  let group=groups.find(g=>Math.abs(g.y-line.cy)<H*.105);
+  if(!group){group={y:line.cy,lines:[]};groups.push(group)}
+  group.lines.push(line.i+1);
+  group.y=group.lines.reduce((sum,i)=>sum+bs[i-1].cy,0)/group.lines.length;
+ }
+ const closePairs=groups.filter(g=>g.lines.length>1).map(g=>g.lines);
+ return {reliable:frameOK&&candidates.length>0,frameOK,strokeCount:st.length,distinctInnerCount:groups.length,innerStrokeCount:candidates.length,clusters:groups.map(g=>({relativeY:Number(((g.y-bb.ymin)/H).toFixed(3)),strokeNumbers:g.lines})),overtraced:closePairs.length>0,overtracedStrokeGroups:closePairs};
+}
+// Reusable nested-component inspection: works on an extracted inner box, not a full glyph.
+// Gate extraction (first eight pen-down strokes) is a *pilot assumption*, not a universal segmentation solution.
+function nestedBoxEvidence(st){
+ const out={reliable:false,component:'門/口・日',strokeCount:st.length,gateStrokeCount:8};
+ if(st.length!==11&&st.length!==12)return {...out,reason:'画数が11・12以外のため内側部品を確定できません。'};
+ const outer=st.slice(0,8), inner=st.slice(8);
+ if(outer.length!==8||inner.length<3||inner.length>4)return {...out,reason:'門と内側部品の分離ができません。'};
+ const gate=bounds(outer),box=bounds(inner),GW=gate.xmax-gate.xmin,GH=gate.ymax-gate.ymin,IW=box.xmax-box.xmin,IH=box.ymax-box.ymin;
+ if(GW<20||GH<20||IW<GW*.13||IH<GH*.12)return {...out,reason:'外枠または内側の囲みが小さすぎます。'};
+ const bb=inner.map(v=>bstroke(resample(v,32)));
+ const left=bb[0],fold=bb[1],bottom=bb[inner.length-1];
+ const gateOK=box.xmin>=gate.xmin-GW*.08&&box.xmax<=gate.xmax+GW*.08&&box.ymin>=gate.ymin-GH*.10&&box.ymax<=gate.ymax+GH*.11;
+ const frameOK=left.h>IH*.60&&fold.w>IW*.65&&fold.h>IH*.55&&bottom.w>IW*.54&&Math.abs(fold.cy-left.cy)<IH*.26;
+ // Horizontal inner bars are pen traces distinct from the top of the fold and bottom closure.
+ const candidates=bb.slice(2,-1).map((b,i)=>({...b,strokeNumber:i+11})).filter(b=>b.w>IW*.40&&b.w>b.h*1.45&&b.cy>box.ymin+IH*.18&&b.cy<box.ymax-IH*.14);
+ const groups=[];
+ for(const b of candidates){let g=groups.find(g=>Math.abs(g.y-b.cy)<IH*.11);if(g){g.n++;g.strokes.push(b.strokeNumber);g.y=(g.y*(g.n-1)+b.cy)/g.n;}else groups.push({y:b.cy,n:1,strokes:[b.strokeNumber]});}
+ const overtraced=groups.some(g=>g.n>1);
+ return {...out,reliable:gateOK&&frameOK,gateOK,frameOK,innerStrokeCount:inner.length,innerBox:{width:Math.round(IW),height:Math.round(IH)},independentInnerBars:groups.length,recordedInnerBars:candidates.length,overtraced,groups:groups.map(g=>({relativeY:Number(((g.y-box.ymin)/IH).toFixed(3)),strokeNumbers:g.strokes})),reason:gateOK&&frameOK?'内側の囲みを抽出しました。':'門または内側の囲み形状が不明瞭です。'};
+}
+// Shared gate-plus-inner-component extraction for 聞 (experimental handwritten-ear pilot).
+// Evidence is structural: pen strokes are not classified as wrong purely by order.
+function nestedEarEvidence(st){
+ const out={reliable:false,component:'門/耳',strokeCount:st.length,gateStrokeCount:8,innerStrokeCount:Math.max(0,st.length-8)};
+ if(st.length<11||st.length>18)return {...out,reason:'門と内側の耳を分けるための筆画が不足、または多すぎます。'};
+ // Inspect the pen geometry even when its count is not the textbook stroke count.
+ // Use the outer component as spatial reference, so a stray outlier does not distort ear bounds.
+ const gate=bounds(st.slice(0,8)),GW=Math.max(1,gate.xmax-gate.xmin),GH=Math.max(1,gate.ymax-gate.ymin);
+ const raw=st.slice(8).map((stroke,i)=>{const b=bstroke(resample(stroke,32));return {...b,index:i+9,stroke};});
+ const contained=raw.filter(b=>b.cx>=gate.xmin-GW*.06&&b.cx<=gate.xmax+GW*.06&&b.cy>=gate.ymin-GH*.08&&b.cy<=gate.ymax+GH*.10);
+ const outside=raw.filter(b=>!contained.includes(b));
+ if(contained.length<3)return {...out,gateOK:false,extraOutsideStrokeNumbers:outside.map(b=>b.index),reason:'門の内側の筆画を十分に抽出できません。'};
+ const box=bounds(contained.map(b=>b.stroke)),IW=Math.max(1,box.xmax-box.xmin),IH=Math.max(1,box.ymax-box.ymin);
+ const gateOK=GW>70&&GH>80&&box.xmin>=gate.xmin-GW*.10&&box.xmax<=gate.xmax+GW*.10&&box.ymin>=gate.ymin-GH*.13&&box.ymax<=gate.ymax+GH*.13&&IW>GW*.18&&IH>GH*.17;
+ const horizontals=contained.filter(b=>b.w>IW*.35&&b.w>b.h*1.55);
+ const verticals=contained.filter(b=>b.h>IH*.35&&b.h>b.w*1.5);
+ const ordered=[...horizontals].sort((a,b)=>a.cy-b.cy);
+ const groups=[];for(const b of ordered){let g=groups.find(g=>Math.abs(g.y-b.cy)<IH*.10);if(g){g.strokes.push(b.index);g.y=g.strokes.reduce((a,i)=>a+raw.find(r=>r.index===i).cy,0)/g.strokes.length;}else groups.push({y:b.cy,strokes:[b.index]});}
+ const overtraced=groups.some(g=>g.strokes.length>1);
+ const tallVertical=verticals.some(b=>b.h>IH*.60);
+ // The ear has multiple horizontal levels plus tall vertical structure.
+ // A count mismatch never on its own establishes an alternative character.
+ const frameOK=groups.length>=2&&verticals.length>=1&&tallVertical;
+ const standard=st.length===14;
+ const extraOutside=outside.length>0;
+ const candidateEar=gateOK&&frameOK;
+ const reliable=candidateEar&&standard&&!extraOutside&&!overtraced;
+ let reason;
+ if(!gateOK)reason='門と内側の耳を確実に分離できません。';
+ else if(extraOutside)reason='耳に似た内部構造を検出しましたが、文字の外側に別の筆画が記録されています。';
+ else if(overtraced)reason='内部の横画が近接・重複しています。耳の線の間隔を確認してください。';
+ else if(candidateEar&&!standard)reason='耳に似た横画・縦画の構造を確認しましたが、記録画数が14画と異なります。';
+ else if(candidateEar)reason='内側に耳の横画と縦画の構成が確認できました。';
+ else reason='耳の横画と縦画の配置を十分に確認できません。';
+ return {...out,reliable,candidateEar,gateOK,frameOK,innerBox:{width:Math.round(IW),height:Math.round(IH)},horizontalStrokeCount:horizontals.length,independentHorizontalLevels:groups.length,verticalStrokeCount:verticals.length,tallVertical,overtraced,overtracedStrokeGroups:groups.filter(g=>g.strokes.length>1).map(g=>g.strokes),extraOutsideStrokeNumbers:outside.map(b=>b.index),measuredInnerStrokeCount:contained.length,reason};
+}
+// v4.8 shared 門-component classification. Prefer observed geometry to the
+// *target* character's stroke-count branch; uncertain geometry stays uncertain.
+function sharedGateComponent(st){
+ const base={status:'uncertain',observed:null,measures:null,reason:'門の内側の部品を確実に分類できません。'};
+ if(st.length===11||st.length===12){
+  const box=nestedBoxEvidence(st);
+  if(box.reliable&&!box.overtraced){
+   if(st.length===11&&box.innerStrokeCount===3&&box.independentInnerBars===0)
+    return {status:'recognized',observed:'口',measures:box,reason:'門の内側に独立した内部横画がない「口」を確認しました。'};
+   if(st.length===12&&box.innerStrokeCount===4&&box.independentInnerBars===1)
+    return {status:'recognized',observed:'日',measures:box,reason:'門の内側に独立した横画が1本ある「日」を確認しました。'};
+  }
+  if(box.overtraced)return {status:'overlap',observed:null,measures:box,reason:'内側の線が重なっています。部品を断定しません。'};
+  return {...base,measures:box,reason:box.reason};
+ }
+ // In particular 14-stroke writing of 聞 must be inspected even for 問/間 questions.
+ // Ear-like line-count alone is insufficient: only reliable framed evidence can oppose.
+ const ear=nestedEarEvidence(st);
+ if(ear.reliable&&ear.gateOK&&ear.frameOK&&ear.candidateEar&&
+    ear.measuredInnerStrokeCount===6&&!ear.overtraced&&!ear.extraOutsideStrokeNumbers.length){
+  return {status:'recognized',observed:'耳',measures:ear,reason:'門の内側の横画・縦画の配置が「耳」の構造と一致しました。'};
+ }
+ if(ear.overtraced)return {status:'overlap',observed:null,measures:ear,reason:'内側の線が重なり部品を断定できません。'};
+ return {...base,measures:ear,reason:ear.reason};
+}
+function contrastAnalysis(st,target){
+ const rule=CONTRAST_DICTIONARY.find(x=>x.chars.includes(target));
+ if(!rule)return {status:'not_applicable',target,reason:'この漢字に登録済みの類似字ルールはありません。',dictionaryId:null};
+ if(!st.length)return {status:'uncertain',target,dictionaryId:rule.id,reason:'筆跡がありません。'};
+ if(rule.feature==='nested_component_ear'||rule.feature==='nested_component_inner_bar'){
+  const shared=sharedGateComponent(st);
+  const expected=target==='問'?'口':target==='間'?'日':'耳';
+  const feature=rule.feature;
+  const measures={...(shared.measures||{}),sharedComponent:shared.observed,sharedStatus:shared.status};
+  const status=shared.status==='overlap'?'overlap':shared.status==='recognized'?
+    (shared.observed===expected?'supports':'opposes'):'uncertain';
+  const other=shared.observed&&shared.observed!==expected?({'口':'問','日':'間','耳':'聞'})[shared.observed]:
+    target==='聞'?'問・間':target==='問'?'間・聞':'問・聞';
+  return {status,target,dictionaryId:rule.id,contrastWith:other,feature,measures,
+   reason:status==='opposes'?'漢字の構造違い：門の内側は「'+expected+'」です。「'+shared.observed+'」ではありません。':shared.reason};
+ }
+ let bb=bounds(st),W=Math.max(bb.xmax-bb.xmin,1),H=Math.max(bb.ymax-bb.ymin,1),bs=st.map(x=>bstroke(resample(x,32)));
+ let horizontal=bs.map((b,i)=>({...b,i})).filter(b=>b.w>=Math.max(b.h*1.25,W*.18));
+ if(rule.feature==='upper_lower_horizontal_length'){
+  if(st.length!==(rule.id==='tsuchi-shi'?3:5))return {status:'uncertain',target,dictionaryId:rule.id,reason:'画数が標準と異なり、2本の横画を確実に対応付けられません。',measures:{strokeCount:st.length}};
+  let pair=horizontal.sort((a,b)=>a.cy-b.cy).slice(0,2);
+  if(pair.length<2||pair[1].cy-pair[0].cy<H*.09)return {status:'uncertain',target,dictionaryId:rule.id,reason:'上下2本の横画を確実に抽出できません。'};
+  let top=pair[0],bottom=pair[1],ratio=bottom.w/Math.max(1,top.w),isLowerLong=['土','未'].includes(target);
+  let status=ratio>1.16?(isLowerLong?'supports':'opposes'):ratio<.86?(isLowerLong?'opposes':'supports'):'uncertain';
+  return {status,target,dictionaryId:rule.id,contrastWith:rule.chars.find(x=>x!==target),feature:rule.feature,measures:{strokeCount:st.length,upperStroke:top.i+1,lowerStroke:bottom.i+1,upperWidth:Math.round(top.w),lowerWidth:Math.round(bottom.w),lowerToUpperRatio:Number(ratio.toFixed(3))},reason:status==='supports'?'横画の長短は出題字の特徴と一致しています。':status==='opposes'?'横画の長短が類似する別の字の特徴に近くなっています。':'横画の長さが近く、決定的な区別はできません。'};
+ }
+ const evidence=interiorHorizontalEvidence(st),expected=target==='日'?1:2,other=target==='日'?'目':'日';
+ if(!evidence.reliable)return {status:'uncertain',target,dictionaryId:rule.id,contrastWith:other,feature:rule.feature,measures:evidence,reason:'外枠または内部横画を十分に確認できず、構造を断定できません。'};
+ // Priority: two intentionally recorded interior strokes merged into a single visible line
+ // are a legibility/overlap problem, NOT proof that the writer chose the other kanji.
+ const mergedExpectedLines=target==='目'&&evidence.innerStrokeCount>=2&&evidence.distinctInnerCount===1&&evidence.overtraced;
+ const status=mergedExpectedLines?'overlap':evidence.distinctInnerCount===expected?'supports':evidence.distinctInnerCount===(target==='日'?2:1)?'opposes':'uncertain';
+ return {status,target,dictionaryId:rule.id,contrastWith:other,feature:rule.feature,measures:{...evidence,expectedInnerCount:expected},reason:status==='supports'?'独立した内部横画の本数は出題字と一致しています。'+(evidence.overtraced?'ただし重ね書きの画があります。':''):status==='opposes'?'内部に独立した横画が'+evidence.distinctInnerCount+'本あり、出題字「'+target+'」ではなく「'+other+'」の構造に一致しています。':status==='overlap'?'内部横画は2画記録されていますが、重なって1本に見えます。字形の誤りとは断定せず、2本を離して書き直してください。':'内部の横画数を確定できません。'};
+}
+function renderContrast(data,target){let rule=CONTRAST_DICTIONARY.find(x=>x.chars.includes(target)),el=$('contrast-result'),list=$('contrast-dictionary');list.replaceChildren();
+ for(let entry of CONTRAST_DICTIONARY){let wrap=document.createElement('p');let strong=document.createElement('strong');strong.textContent=entry.chars.join(' ↔ ')+'：';wrap.append(strong,document.createTextNode(' '+entry.label+'。'+entry.note));list.append(wrap)}
+ if(!rule){el.dataset.status='not_applicable';el.textContent='この漢字にはまだ類似字辞書がありません。①の従来判定と④の汎用比較は利用できます。';return;}
+ if(!data){el.dataset.status='not_applicable';el.textContent='「'+target+'」の部品構造を調べます。書いて判定してください。';return;}
+ el.dataset.status=data.status;let mark={supports:'✅ 構造差が一致',opposes:'❌ 別字の構造を検出',overlap:'✏️ 線が重なっています',uncertain:'🔎 判別保留',not_applicable:'対象外'}[data.status];
+ let metric=data.measures?.independentHorizontalLevels!==undefined?' 耳の横画の段：'+data.measures.independentHorizontalLevels+'、縦画：'+data.measures.verticalStrokeCount:data.measures?.independentInnerBars!==undefined?' 内側の独立横画：'+data.measures.independentInnerBars+'本、部品の記録画数：'+data.measures.innerStrokeCount:data.measures?.lowerToUpperRatio!==undefined?' 下横線／上横線の比率：'+data.measures.lowerToUpperRatio:data.measures?.distinctInnerCount!==undefined?' 独立した内部横画：'+data.measures.distinctInnerCount+'本、記録した内横画：'+data.measures.innerStrokeCount+'画':'';
+ el.textContent=mark+'｜'+rule.chars.join('・')+'\n'+data.reason+metric+'\n※「士・土」の上下の横画や「日・目」「問・間」の内部構造が明確に別字を示した場合は、⑥の学習判定に反映します。「聞」は画数にかかわらず耳の部品構造と枠外線を調べ、曖昧なら保留します。';el.style.whiteSpace='pre-wrap';
+}
+
+// v4.8: reusable spatial skeleton and duplicate-stroke evidence for all 21 characters.
+// The grouping uses sampled trace geometry, not the number of pen-down events.
+function spatialStrokeEvidence(st){
+ if(!st.length)return {status:'empty'};
+ const b=bounds(st),W=Math.max(1,b.xmax-b.xmin),H=Math.max(1,b.ymax-b.ymin);
+ const bs=st.map((line,i)=>({...bstroke(resample(line,32)),number:i+1,line}));
+ const horizontal=bs.filter(x=>x.w>W*.135&&x.w>x.h*1.8);
+ const vertical=bs.filter(x=>x.h>H*.135&&x.h>x.w*1.8);
+ function group(lines,key,span){const out=[];for(const x of [...lines].sort((a,b)=>a[key]-b[key])){
+  let g=out.find(q=>Math.abs(q.center-x[key])<=span*.06);
+  if(!g){g={center:x[key],items:[]};out.push(g)}g.items.push(x.number);g.center=g.items.reduce((n,i)=>n+bs[i-1][key],0)/g.items.length;
+ }return out.map(g=>({position:Math.round(g.center),strokes:g.items}));}
+ const h=group(horizontal,'cy',H),v=group(vertical,'cx',W);
+ // Check overlapping ink paths. Comparing only bounding boxes would falsely combine
+ // two parallel but separate horizontal strokes. Compare resampled point coverage.
+ const duplicates=[];
+ for(let i=0;i<bs.length;i++)for(let j=i+1;j<bs.length;j++){
+  const a=bs[i],c=bs[j];
+  if(a.w<3&&a.h<3||c.w<3&&c.h<3)continue;
+  const horizontalPair=a.w>a.h*1.8&&c.w>c.h*1.8;
+  const verticalPair=a.h>a.w*1.8&&c.h>c.w*1.8;
+  if(!horizontalPair&&!verticalPair)continue;
+  const axis=horizontalPair?'x':'y',perp=horizontalPair?'y':'x';
+  const left=Math.max(a[axis+'min'],c[axis+'min']),right=Math.min(a[axis+'max'],c[axis+'max']);
+  const small=Math.max(1,Math.min(a[axis+'max']-a[axis+'min'],c[axis+'max']-c[axis+'min']));
+  const gap=Math.abs(a['c'+perp]-c['c'+perp]);
+  if((right-left)/small>.75&&gap<Math.max(4,(horizontalPair?H:W)*.022))duplicates.push([a.number,c.number]);
+ }
+ return {status:'measured',horizontalLevels:h.length,verticalColumns:v.length,
+  horizontalGroups:h,verticalGroups:v,duplicateStrokePairs:duplicates,
+  hasRetracing:duplicates.length>0,independentHorizontalStrokes:horizontal.length,
+  independentVerticalStrokes:vertical.length};
+}
+// v4.8 learning checks are independent of the legacy character identity and the stroke-order practice.
+const STANDARD_STROKES={土:3,士:3,山:3,十:2,口:3,川:3,未:5,末:5,日:4,目:5,田:5,回:6,国:8,間:12,問:11,聞:14,道:12,話:13,有:6,明:8,万:3};
+let learningActive=false,learningAttempts=0,learningStatus='none',learningInitial=null,learningLast=null;
+// v4.8: whole-character topology guard, independent of pen-down count and font scores.
+// Cluster long straight strokes by their *spatial locations*, so retracing a few
+// original strokes does not produce an artificial many-component character.
+// Only reject on a strong, positively detected contradiction to the target's
+// elementary skeleton. Other cases remain eligible for count/overlap checks.
+const SIMPLE_SKELETONS={士:{h:2,v:1},土:{h:2,v:1},十:{h:1,v:1}};
+function wholeStructureEvidence(st,target){
+ const skeleton=SIMPLE_SKELETONS[target];
+ if(!skeleton||st.length<7)return {status:'not_applicable',target};
+ const area=bounds(st),W=Math.max(1,area.xmax-area.xmin),H=Math.max(1,area.ymax-area.ymin);
+ const boxes=st.filter(s=>s.length).map(s=>bstroke(resample(s,32)));
+ const horizontal=boxes.filter(b=>b.w>=W*.16&&b.w>=b.h*1.8);
+ const vertical=boxes.filter(b=>b.h>=H*.16&&b.h>=b.w*1.8);
+ function levels(items,axis,span){
+  const sorted=[...items].sort((a,b)=>a[axis]-b[axis]);let groups=[];
+  for(const b of sorted){let g=groups.find(g=>Math.abs(g.center-b[axis])<=span*.065);
+   if(g){g.sum+=b[axis];g.count++;g.center=g.sum/g.count;}
+   else groups.push({center:b[axis],sum:b[axis],count:1});
+  }return groups.length;
+ }
+ const hLevels=levels(horizontal,'cy',H),vColumns=levels(vertical,'cx',W);
+ const excessHorizontal=hLevels>=skeleton.h+2,excessVertical=vColumns>=skeleton.v+2;
+ // Multiple independent rows *and* columns cannot arise from repeatedly
+ // tracing the two horizontals and one vertical of 士/土/十.
+ const definite=excessHorizontal&&excessVertical&&horizontal.length>=4&&vertical.length>=3;
+ return {status:definite?'opposes':'uncertain',feature:'whole_character_topology',target,reliable:definite,
+  horizontalLevels:hLevels,verticalColumns:vColumns,expectedHorizontalLevels:skeleton.h,
+  expectedVerticalColumns:skeleton.v,observedStrokes:st.length,
+  reason:definite?'出題「'+target+'」は単純な横画・縦画の骨組みですが、筆跡には離れた横線'+hLevels+'段と縦線'+vColumns+'列があり、複数の部品を持つ異なる字形です。単なる画数超過や重ね書きとは判断しません。':'独立した多数の横線・縦線を同時には確認できません。画数だけで別字と断定しません。'};
+}
+
+// v4.8: a conservative, shared-geometry based positive skeleton check.
+// Only a recognizable 士/土 with repeated strokes can receive positive shape
+// evidence despite a mismatched pen-down count. This NEVER waives count rules.
+function retracedSimpleShapeEvidence(st,target,geometry){
+ if(!['士','土'].includes(target)||st.length<=STANDARD_STROKES[target]||!geometry?.hasRetracing)
+  return {status:'not_applicable'};
+ if(geometry.horizontalLevels!==2||geometry.verticalColumns!==1)
+  return {status:'uncertain',reason:'横画2段・縦画1列の骨組みを確認できません。'};
+ const b=bounds(st),W=Math.max(1,b.xmax-b.xmin),H=Math.max(1,b.ymax-b.ymin);
+ const bs=st.map(s=>bstroke(resample(s,32)));
+ const groups=geometry.horizontalGroups.slice().sort((a,b)=>a.position-b.position);
+ if(groups.length!==2)return {status:'uncertain'};
+ const long=(group)=>group.strokes.map(n=>bs[n-1]).filter(q=>q.w>W*.35&&q.w>q.h*1.8).sort((a,b)=>b.w-a.w)[0];
+ const top=long(groups[0]),bottom=long(groups[1]);
+ const verts=geometry.verticalGroups[0].strokes.map(n=>bs[n-1]);
+ const vertical=verts.filter(q=>q.h>H*.55&&q.h>q.w*1.8);
+ if(!top||!bottom||!vertical.length||groups[1].position-groups[0].position<H*.14)
+  return {status:'uncertain',reason:'横画・縦画の位置を十分に確認できません。'};
+ const ratio=bottom.w/Math.max(1,top.w);
+ const match=target==='士'?ratio<.86:ratio>1.16;
+ return {status:match?'supports':'uncertain',target,lowerToUpperRatio:Number(ratio.toFixed(3)),
+  horizontalLevels:2,verticalColumns:1,duplicateStrokePairs:geometry.duplicateStrokePairs,
+  reason:match?'上・下の横画の長さと縦画の配置が「'+target+'」の構造に一致しています。':'横画の長短から「'+target+'」だと確定できません。'};
+}
+function learningAnalysis(st,target,contrast){
+ const expected=STANDARD_STROKES[target],actual=st.length;
+ if(!st.length)return {status:'empty',expected,actual,reason:'筆跡がありません。'};
+ const whole=wholeStructureEvidence(st,target);
+ if(whole.status==='opposes')return {status:'wrong_structure',expected,actual,reason:'❌ 字形・構成の間違い：'+whole.reason,structuralEvidence:whole};
+ if(['問','間','聞'].includes(target)&&contrast&&
+   ['nested_component_ear','nested_component_inner_bar'].includes(contrast.feature)){
+  const e=contrast.measures||{};
+  if(contrast.status==='opposes'&&e.sharedComponent){
+   const alternative=({'口':'問','日':'間','耳':'聞'})[e.sharedComponent];
+   return {status:'wrong_structure',expected,actual,likelySimilar:alternative,
+    reason:'❌ 漢字の構造違い：門の内側は「'+({'問':'口','間':'日','聞':'耳'})[target]+'」です。「'+e.sharedComponent+'」ではありません。',structuralEvidence:e};
+  }
+  if(contrast.status==='overlap')return {status:'overlap',expected,actual,
+   reason:'門の内側の線が重なっているため、部品を断定せず書き直してください。',structuralEvidence:e};
+  if(target==='聞'&&e.extraOutsideStrokeNumbers?.length)return {status:'count_mismatch',expected,actual,
+   reason:'内側の構造は確定できませんが、文字の外側に第'+e.extraOutsideStrokeNumbers.join('・')+'画が記録されています。確認して書き直してください。',structuralEvidence:e};
+  if(actual===expected&&contrast.status==='uncertain')return {status:'ambiguous',expected,actual,
+   reason:'門の内側の部品を確実に確認できないため書き直してください。',structuralEvidence:e};
+ }
+ // v4.8: Explicit opposite character, rather than an ambiguous lookalike, when
+ // three distinct strokes clearly form the 士/土 skeleton. This requires
+ // horizontal/vertical topology AND a robust opposite length relation.
+ // Equal-ish horizontal lengths, extra pen-downs and retracing remain redo.
+ if(['士','土'].includes(target)&&actual===3&&contrast?.status==='opposes'&&
+    contrast.feature==='upper_lower_horizontal_length'){
+  const spatial=spatialStrokeEvidence(st);
+  const ratio=contrast.measures?.lowerToUpperRatio;
+  const distinctSkeleton=spatial.horizontalLevels===2&&spatial.verticalColumns===1&&
+    spatial.independentHorizontalStrokes===2&&spatial.independentVerticalStrokes===1&&
+    !spatial.hasRetracing;
+  const clearOpposite=target==='士'?ratio>=1.16:ratio<=.86;
+  if(distinctSkeleton&&clearOpposite){
+   const alternative=target==='士'?'土':'士';
+   return {status:'wrong_structure',expected,actual,likelySimilar:alternative,
+    reason:'❌ 漢字の構造違い：「'+target+'」は'+(target==='士'?'上':'下')+'の横線が長い字です。今回の筆跡は'+(target==='士'?'下':'上')+'の横線が長く、「'+alternative+'」の構造になっています。',
+    structuralEvidence:{feature:'upper_lower_horizontal_length',reliable:true,
+      ...contrast.measures,spatialGeometry:spatial}};
+  }
+ }
+ // v4.8: 明瞭な「未・末」の取り違えを構造違いとして扱う。
+ // 二つの独立した横線、中心の縦線、左右の払い、重ね書き無しを検査。
+ // 比率が近い場合や、５画でも骨組みが確認できない場合は従来どおり書き直し。
+ if(['未','末'].includes(target)&&actual===5&&contrast?.status==='opposes'&&
+    contrast.feature==='upper_lower_horizontal_length'){
+  const spatial=spatialStrokeEvidence(st);
+  const measures=contrast.measures||{};
+  const ratio=measures.lowerToUpperRatio;
+  const bb=bounds(st),W=Math.max(1,bb.xmax-bb.xmin),H=Math.max(1,bb.ymax-bb.ymin);
+  const b=st.map(x=>bstroke(resample(x,32)));
+  const upper=b[(measures.upperStroke||0)-1],lower=b[(measures.lowerStroke||0)-1];
+  const remaining=b.map((q,i)=>({...q,i})).filter(q=>q.i!==measures.upperStroke-1&&q.i!==measures.lowerStroke-1);
+  const centerVertical=remaining.filter(q=>q.h>=H*.42&&q.h>=q.w*1.15&&
+    q.cx>bb.xmin+W*.27&&q.cx<bb.xmax-W*.27);
+  const diagonals=remaining.filter(q=>q.w>=W*.14&&q.h>=H*.14&&q.w<q.h*2.7&&q.h<q.w*2.7);
+  const baseline=!!upper&&!!lower&&upper.cy<lower.cy&&
+    lower.cy-upper.cy>=H*.075&&
+    spatial.horizontalLevels>=2&&centerVertical.length>=1&&
+    diagonals.length>=1&&!spatial.hasRetracing;
+  const clearlyOther=target==='未'?ratio<=.86:ratio>=1.16;
+  if(baseline&&clearlyOther){
+   const other=target==='未'?'末':'未';
+   const expectedText=target==='未'?'下':'上';
+   const observedText=target==='未'?'上':'下';
+   return {status:'wrong_structure',expected,actual,likelySimilar:other,
+    reason:'❌ 漢字の構造違い：「'+target+'」は'+expectedText+'の横線が長い字です。今回の筆跡は'+observedText+'の横線が長く、「'+other+'」の構造になっています。',
+    structuralEvidence:{feature:'upper_lower_horizontal_length',reliable:true,
+     ...measures,spatialGeometry:spatial,centerVerticalCount:centerVertical.length,diagonalCount:diagonals.length}};
+  }
+ }
+ // A visible opposite structure takes priority over raw pen-down count.
+ if(['日','目'].includes(target)&&contrast?.status==='opposes'&&contrast.measures?.reliable&&!contrast.measures?.overtraced){
+  return {status:'wrong_structure',expected,actual,likelySimilar:contrast.contrastWith,reason:'❌ 字形の間違い：内部の横画が独立して'+contrast.measures.distinctInnerCount+'本あります。出題「'+target+'」の構造とは異なり、「'+contrast.contrastWith+'」に近い形です。',structuralEvidence:contrast.measures};
+ }
+ if(target==='目'&&contrast?.status==='overlap'){
+  return {status:'overlap',expected,actual,reason:'内部の横画は2画記録されていますが、重なって1本に見えます。「日」を書いたと断定せず、2本の横線の間隔を空けてもう一度書きましょう。',likelySimilar:null,structuralEvidence:contrast.measures};
+ }
+ if(actual!==expected){
+  const geometry=spatialStrokeEvidence(st);
+  const overtraced=contrast?.measures?.overtraced||geometry.hasRetracing;
+  const verifiedShape=retracedSimpleShapeEvidence(st,target,geometry);
+  const shapeConfirmed=verifiedShape.status==='supports';
+  const message=shapeConfirmed?'「'+target+'」の字形・構成は確認できました。ただし、同じ線を重ねて書いた跡があり、記録は'+actual+'画です。標準の'+expected+'画で書き直してください。':overtraced?'線の重ね書きが検出されましたが、出題字の形だと確定できません。記録は'+actual+'画です。標準の'+expected+'画で書き直してください。':'標準は'+expected+'画ですが、'+actual+'画が記録されました。形だけでは誤字と断定できないため、書き直してください。';
+  return {status:'count_mismatch',expected,actual,reason:message,likelySimilar:null,
+    shapeConfirmedByRetrace:shapeConfirmed,structuralEvidence:{...(contrast?.measures||{}),spatialGeometry:geometry,retracedShape:verifiedShape}};
+ }
+ 
+ if(contrast&&contrast.status==='opposes')return {status:'similar_structure',expected,actual,reason:'画数は合っていますが、類似漢字「'+contrast.contrastWith+'」に近い構造です。',likelySimilar:contrast.contrastWith};
+ if(contrast&&contrast.status==='uncertain'&&['土','士','未','末','日','目'].includes(target))return {status:'ambiguous',expected,actual,reason:'画数は合っていますが、類似字との構造差を十分に確認できません。'};
+ return {status:'clear',expected,actual,reason:'画数は一致し、今回の追加確認では書き直しを必要とする問題は見つかりませんでした。'};
+}
+// v4.8: combine independent component evidence with the legacy whole-character result.
+// A conservative positive decision requires the expected pen-down count, trusted gate
+// and inner frame extraction, and the correct number of distinct interior bars.
+function integratedResult(st,target,legacy,contrast,learning){
+ const out={...legacy,checks:[...legacy.checks],warnings:[...legacy.warnings],advice:[...legacy.advice],metrics:{...legacy.metrics}};
+ if(learning.status==='wrong_structure'&&learning.structuralEvidence?.feature==='whole_character_topology'){out.kind='retry';out.checks=[];out.warnings=[];out.metrics['全体構造の矛盾']='独立横線'+learning.structuralEvidence.horizontalLevels+'段・縦線'+learning.structuralEvidence.verticalColumns+'列';}
+ if(target==='聞'&&contrast?.feature==='nested_component_ear'&&contrast.status==='supports'&&
+    contrast.measures?.reliable&&st.length===14&&learning.status==='clear'&&legacy.checks.length===0){
+   out.kind='ok';out.warnings=[];
+   out.metrics['門・内側部品の統合判定']='門＋耳の配置が試験条件と一致';
+   out.metrics['部品判定の信頼性']='試作（先頭8画を門、残り6画を耳と仮定）';
+ }
+ if((target==='問'||target==='間')&&contrast?.status==='supports'&&
+   contrast.measures?.reliable&&contrast.measures?.gateOK&&contrast.measures?.frameOK&&
+   !contrast.measures?.overtraced&&st.length===STANDARD_STROKES[target]&&
+   contrast.measures.innerStrokeCount===(target==='問'?3:4)&&
+   contrast.measures.independentInnerBars===(target==='問'?0:1)&&
+   legacy.checks.length===0&&learning.status==='clear'){
+  out.kind='ok';out.warnings=[];
+  out.metrics['門・内側部品の統合判定']='構造一致・標準画数一致';
+  out.metrics['部品判定の信頼性']='試作（外側8画・内側3または4画という分割仮定）';
+ }
+ return out;
+}
+// v4.8: Explicit policy separating recognizability, pen-down count, and order.
+// The known 国 6/7 check is only a PARTIAL check: it cannot certify full order.
+function finalAssessment(st,target,legacy,contrast,learning,order){
+ const countExpected=STANDARD_STROKES[target],countActual=st.length;
+ const count={status:countActual===countExpected?'ok':'different',expected:countExpected,actual:countActual};
+ const shapeWrong=learning.status==='wrong_structure';
+ const shapeAmbiguous=!shapeWrong&&!learning.shapeConfirmedByRetrace&&(legacy.kind==='retry'||legacy.kind==='uncertain'||
+  ['ambiguous','similar_structure','overlap'].includes(learning.status)||
+  (contrast?.status==='uncertain'&&['問','間','聞'].includes(target)));
+ const shape={status:shapeWrong?'different':shapeAmbiguous?'ambiguous':'compatible',
+  reason:shapeWrong?learning.reason:shapeAmbiguous?'出題文字と一致する形を十分に確認できません。':learning.shapeConfirmedByRetrace?'重ね書きを除くと、出題字「'+target+'」の基本構造を確認できました。':'字形・部品の検査で明確な違いは確認されませんでした。'};
+ if(shapeWrong)return {identity:'wrong_structure',shape,count,order,reason:shape.reason};
+ const reasons=[];
+ if(shapeAmbiguous)reasons.push('字形・構成の一致が不確実です。');
+ if(count.status==='different')reasons.push(learning.shapeConfirmedByRetrace?learning.reason:'画数が'+countActual+'画です。標準の'+countExpected+'画で書き直してください。');
+ if(order.status==='different')reasons.push(order.message);
+ if(order.status==='uncertain')reasons.push('書き順を確実に確認できませんでした。');
+ if(reasons.length)return {identity:'redo',shape,count,order,reason:reasons.join('\n')};
+ return {identity:'provisional_ok',shape,count,order,
+  reason:order.status==='not_checked'?'字形・画数は基準を満たしています。ただし書き順は未検証のため、総合正解は確定していません。':
+   '字形・画数と確認対象の書き順は基準を満たしています。その他の書き順は未検証です。'};
+}
+// v4.8: One authoritative identity verdict. Keep the raw measurements but
+// synchronize the public structural result with the comprehensive assessment.
+function reconciledStructuralResult(legacy,assessment){
+ const result={...legacy,checks:[...(legacy.checks||[])],warnings:[...(legacy.warnings||[])],advice:[...(legacy.advice||[])],metrics:{...(legacy.metrics||{})}};
+ const priorKind=legacy.kind;
+ const status=assessment.identity;
+ const summary=status==='wrong_structure'?'❌ 字形・構成の間違い':status==='redo'?'✏️ 書き直し':'◯ 暫定合格（書き順未検証）';
+ result.kind=status==='wrong_structure'?'wrong_structure':status==='redo'?'retry':result.advice.length?'advice':'ok';
+ result.identity=status;
+ result.shapeStatus=assessment.shape.status;
+ result.verdictReason=assessment.reason;
+ result.rawStructuralKind=priorKind;
+ result.metrics['統合判定']=summary;
+ result.metrics['字形の判定']=assessment.shape.status;
+ // Legacy warnings saying "uncertain" or "pending" conflict with a decided
+ // structural identity. Retain them only as provenance, never as live warnings.
+ if(assessment.shape.status==='different'||assessment.shape.status==='compatible'){
+  result.legacyWarnings=result.warnings.slice();
+  result.warnings=[];
+ }
+ if(status==='wrong_structure'){
+  result.structuralMismatch={confirmed:true,reason:assessment.shape.reason};
+ }else if(status==='redo'){
+  result.retryReason=assessment.reason;
+ }
+ return result;
+}
+function resetLearning(){learningActive=false;learningAttempts=0;learningStatus='none';learningInitial=null;learningLast=null;$('learning').hidden=true;}
+function learningRender(info,r,target){
+ const el=$('learning'),msg=$('learning-message');learningLast=info;
+ const issue=!['clear','empty'].includes(info.status);
+ if(!learningActive){
+  if(!issue){el.hidden=true;learningStatus='none';return;}
+  learningStatus='offer';el.hidden=false;el.dataset.status='redo';
+  msg.textContent=(info.status==='wrong_structure'?'❌ 字形の間違いが見つかりました。':'✏️ もう一度書いて確認しましょう。')+'\n'+info.reason+(info.status==='wrong_structure'?'\n出題字の構造を確かめて書き直しましょう。':'\n構造が明確に異ならない場合、画数だけで別字とは断定しません。');
+  $('learning-redo').hidden=false;$('learning-redo').textContent='もう一度書く';$('learning-cancel').hidden=true;
+ }else{
+  if(!issue&&r.kind!=='retry'&&r.kind!=='uncertain'){
+   learningStatus='success';learningActive=false;el.hidden=false;el.dataset.status='success';
+   msg.textContent='🎉 書き直しで、画数と確認できる構造が整いました！ '+learningAttempts+'回目の書き直しで成功です。';
+   $('learning-redo').hidden=true;$('learning-cancel').hidden=true;
+  }else{
+   learningStatus='repeat';el.hidden=false;el.dataset.status='repeat';
+   let common='まだ確認が必要です。\n'+info.reason;
+   if(info.status==='count_mismatch'&&info.likelySimilar)common+='\n画数からは「'+info.likelySimilar+'」に近い可能性があります。ただし意図した字までは断定できません。';
+   if(info.status==='overlap')common+='\n内部の2本の横画を少し離して書いてください。';
+   if(!issue)common='画数は合っていますが、従来の構造判定ではまだ確認が必要です。';
+   if(learningAttempts>=2&&['ambiguous','count_mismatch'].includes(info.status)&&target==='聞'||learningAttempts>=2&&info.status==='ambiguous'){common='自動判定では部品を確実に確認できませんでした。文字を見せて先生や保護者に確認してもらってください。繰り返しの書き直しは必要ありません。';learningStatus='manual_review';learningActive=false;}
+   msg.textContent='🔎 書き直し '+learningAttempts+'回目：'+common;
+   $('learning-redo').hidden=learningStatus==='manual_review';$('learning-redo').textContent='もう一度書き直す';$('learning-cancel').hidden=false;
+  }
+ }
+}
+$('learning-redo').onclick=()=>{
+ if(!learningActive){learningInitial={...learningLast};learningAttempts=0;}
+ learningActive=true;learningAttempts++;learningStatus='writing';strokes=[];cur=null;lastReport='';paint();
+ $('result').textContent='書き直し '+learningAttempts+'回目：'+$('target').value+'を、画数と線の間隔に気を付けて書いてください。';
+ delete $('result').dataset.kind;$('order-alert').hidden=true;$('metrics').textContent='';
+ renderCommon(null,$('target').value);renderContrast(null,$('target').value);
+ $('learning').hidden=false;$('learning').dataset.status='redo';
+ $('learning-message').textContent='書き直し中：書けたら「構造で判定」を押してください。';
+ $('learning-redo').hidden=true;$('learning-cancel').hidden=false;
+};
+$('learning-cancel').onclick=()=>{resetLearning();$('result').textContent='書き直し練習を終了しました。';};
+
+let retryActive=false, retryAttempts=0, practiceResult='none';
+function practiceUI(mode,msg){let panel=$('practice');panel.hidden=mode==='hide';panel.classList.toggle('success',mode==='success');$('practice-text').textContent=msg||'';$('practice-start').hidden=!(mode==='offer'||mode==='retry');$('practice-start').textContent=mode==='retry'?'もう一度書き直す':'正しい書き順でもう一度書く';$('practice-cancel').hidden=!(mode==='writing'||mode==='retry');}
+function resetPractice(){retryActive=false;retryAttempts=0;practiceResult='none';practiceUI('hide','');}
+$('practice-start').onclick=()=>{retryActive=true;retryAttempts++;practiceResult='writing';strokes=[];cur=null;lastReport='';paint();$('result').textContent='書き順の練習中です。「国」を正しい6・7画目の順番で書いて判定してください。';delete $('result').dataset.kind;$('order-alert').hidden=true;$('metrics').textContent='';renderCommon(null,'国');renderContrast(null,'国');practiceUI('writing','練習 '+retryAttempts+'回目：6画目は下の横線、7画目は点です。書けたら「構造で判定」を押してください。');};
+$('practice-cancel').onclick=()=>{resetPractice();$('result').textContent='書き順の練習を終了しました。';};
+function judge(){
+ if(!strokes.length){$('result').textContent='文字を書いてください。';return;}
+ const target=$('target').value,base=check(strokes,target),contrast=contrastAnalysis(strokes,target),
+ learning=learningAnalysis(strokes,target,contrast),r=integratedResult(strokes,target,base,contrast,learning),
+ order=assessStrokeOrder(strokes,target),final=finalAssessment(strokes,target,r,contrast,learning,order),consistent= reconciledStructuralResult(r,final);
+ // The general learning workflow must also request re-writing for wrong order.
+ const practiceInfo=final.identity==='redo'&&learning.status==='clear'?{
+  status:order.status==='different'?'order_mismatch':'ambiguous',expected:learning.expected,actual:learning.actual,
+  reason:final.reason}:learning;
+ learningRender(practiceInfo,r,target);
+ if(final.identity==='provisional_ok'&&learningActive){learningStatus='success';learningActive=false;}
+ let title=final.identity==='wrong_structure'?'❌ 字形・構成の間違い':
+  final.identity==='redo'?'✏️ 書き直し': '◯ 字形・画数は合格（書き順未検証）';
+ const lines=['【① 文字の構成・類似性】',title,final.shape.reason,
+  '','【② 画数】',final.count.status==='ok'?`標準${final.count.expected}画と一致しています。`:
+  `記録${final.count.actual}画／標準${final.count.expected}画。書き直してください。`,
+  '','【③ 書き順】',order.message];
+ if(order.status==='not_checked')lines.push('書き順は未検証です。正しかったと推定していません。');
+ else if(order.status==='partial_ok')lines.push('現時点で確認できる部分のみ一致しています。全画の筆順は未検証です。');
+ lines.push('','【④ 総合判定】',title,final.reason);
+ if(consistent.advice.length)lines.push('','【⑤ 書写の改善ヒント】',...consistent.advice.map(x=>'・'+x));
+ lines.push('','※試験的な判定です。字体や書風を完全には評価できません。書き順の全画検証はまだ実装されていません。');
+ lastReport=lines.join('\n');$('result').textContent=lastReport;
+ $('result').dataset.kind=final.identity;
+ const panel=$('order-alert');panel.hidden=order.status==='not_checked';panel.dataset.status=order.status;
+ panel.textContent=order.status==='different'?'⚠️ '+order.message:order.message;
+ // Preserve the 国-specific guidance, but never allow it to override overall verdict.
+ if(target==='国'&&order.status==='different'){practiceResult='offer';practiceUI('offer',order.message);}
+ else {resetPractice();}
+ $('metrics').textContent=JSON.stringify({...consistent.metrics,最終判定:final.identity,字形:final.shape.status,画数:final.count.status,書き順:order.status},null,2);
+ renderCommon(commonFeatures(strokes),target);renderContrast(contrast,target);return final;
+}
+$('judge').onclick=judge;$('clear').onclick=()=>{strokes=[];cur=null;paint();$('result').textContent='消しました。もう一度書けます。';$('metrics').textContent='';renderCommon(null,$('target').value);renderContrast(null,$('target').value);$('order-alert').hidden=true;if(!retryActive)resetPractice();if(!learningActive)resetLearning();};$('undo').onclick=()=>{strokes.pop();paint();$('result').textContent=`${strokes.length}画を書きました。`;$('order-alert').hidden=true};$('target').onchange=()=>{resetPractice();resetLearning();$('clear').click()};
+$('import').onchange=async e=>{let f=e.target.files[0];if(!f)return;try{let v=JSON.parse(await f.text());if(!Array.isArray(v.strokes))throw Error('strokesがありません');if(!['土','士','山','十','口','川','未','末','日','目','田','回','国','間','問','聞','道','話','有','明','万'].includes(v.target))throw Error('対応している21文字のJSONを選んでください');resetPractice();resetLearning();$('target').value=v.target;strokes=v.strokes;paint();judge();$('result').textContent='過去のJSONを構造方式で再判定しました：'+f.name+'\n\n'+$('result').textContent}catch(err){$('result').textContent='読み込みエラー：'+err.message}e.target.value=''};
+$('batch-import').onchange=async e=>{const files=[...e.target.files],el=$('batch-report');el.replaceChildren();if(!files.length)return;let rows=[],fails=0;for(const file of files){try{let obj=JSON.parse(await file.text());if(!Array.isArray(obj.strokes)||!GENERIC_TARGETS.includes(obj.target)||!obj.strokes.length)throw Error('対象外または筆跡なし');let features=commonFeatures(obj.strokes),cc=contrastAnalysis(obj.strokes,obj.target),ll=learningAnalysis(obj.strokes,obj.target,cc),r=integratedResult(obj.strokes,obj.target,check(obj.strokes,obj.target),cc,ll),rank=features.ranking.findIndex(c=>c.kanji===obj.target)+1,sim=features.ranking[rank-1].similarity;const assessment=finalAssessment(obj.strokes,obj.target,r,cc,ll,assessStrokeOrder(obj.strokes,obj.target));rows.push([obj.target,file.name,({wrong_structure:'❌ 構造違い',redo:'✏️ 書き直し',provisional_ok:'◯ 暫定合格'})[assessment.identity]||'保留',String(rank)+'/20',sim+'/100']);}catch(_){fails++;}}
+ const info=document.createElement('p');info.textContent=`${rows.length}件の共通比較を完了。読み込めなかったファイル：${fails}件。順位・点数は正誤判定ではありません。`;el.append(info);
+ const table=document.createElement('table'),head=document.createElement('thead'),header=document.createElement('tr');for(const h of ['漢字','JSON','統合判定','汎用順位','字形近さ']){const t=document.createElement('th');t.textContent=h;header.append(t)}head.append(header);table.append(head);let body=document.createElement('tbody');for(const row of rows){let tr=document.createElement('tr');for(const cell of row){let td=document.createElement('td');td.textContent=cell;tr.append(td)}body.append(tr)}table.append(body);el.append(table);e.target.value='';};
+$('save').onclick=()=>{let target=$('target').value,contrast=strokes.length?contrastAnalysis(strokes,target):null,learning=strokes.length?learningAnalysis(strokes,target,contrast):null,r=strokes.length?integratedResult(strokes,target,check(strokes,target),contrast,learning):null;let assessment=r?finalAssessment(strokes,target,r,contrast,learning,assessStrokeOrder(strokes,target)):null,consistent=r?reconciledStructuralResult(r,assessment):null;let data={schema:'kanji-structure-v4.8',target:$('target').value,createdAt:new Date().toISOString(),canvas:{width:600,height:600},diagnostic:lastReport,structuralResult:consistent,rawStructuralResult:r,strokeOrder:strokes.length?assessStrokeOrder(strokes,$('target').value):null,practice:{status:practiceResult,attempts:retryAttempts,active:retryActive},learningPractice:{status:learningStatus,attempts:learningAttempts,active:learningActive,initial:learningInitial,current:learning},genericAnalysis:strokes.length?commonFeatures(strokes):null,contrastAnalysis:contrast,wholeStructureAnalysis:strokes.length?wholeStructureEvidence(strokes,target):null,spatialStrokeAnalysis:strokes.length?spatialStrokeEvidence(strokes):null,retracedShapeAnalysis:learning?.structuralEvidence?.retracedShape||null,contrastDictionaryVersion:'v4.8-shared-spatial-strokes',evaluation:{...(assessment||{}),handwritingAdvice:r?r.advice:[]},strokes};let url=URL.createObjectURL(new Blob([JSON.stringify(data,null,2)],{type:'application/json'})),a=document.createElement('a');a.href=url;a.download='kanji-structure-'+$('target').value+'-'+Date.now()+'.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000)};
+renderContrast(null,$('target').value);
+</script></body></html>
