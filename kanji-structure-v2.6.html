@@ -1,0 +1,182 @@
+<!doctype html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>漢字ゲームβ v2.6｜5文字追加・部品構造の先行検証</title><style>
+:root{font-family:system-ui,-apple-system,'Yu Gothic',sans-serif;color:#1b2c44;background:#f5f7fb}*{box-sizing:border-box}main{max-width:760px;margin:auto;padding:16px}h1{font-size:1.4rem}h2{font-size:1.1rem}.card{background:white;padding:16px;border-radius:14px;margin:14px 0;box-shadow:0 2px 12px #0001}.controls{display:flex;gap:9px;align-items:center;flex-wrap:wrap}button,select,input{font:inherit}button,select{padding:10px 14px;border:1px solid #afbdd1;border-radius:10px;background:white;color:#183254}button.primary{background:#2459b5;color:white;border-color:#2459b5}.pad{position:relative;width:min(100%,510px);aspect-ratio:1;margin:14px auto;border:2px solid #c0cfe4;border-radius:12px;overflow:hidden;background:linear-gradient(90deg,transparent 49.85%,#e8edf5 50%,transparent 50.15%),linear-gradient(transparent 49.85%,#e8edf5 50%,transparent 50.15%),white}.pad canvas{width:100%;height:100%;touch-action:none;display:block}.muted{color:#64748b;font-size:.9rem}#result{white-space:pre-wrap;background:#eef4fb;border-radius:10px;padding:14px;line-height:1.7}#result[data-kind="ok"],#result[data-kind="advice"]{background:#edf8f0}#result[data-kind="retry"]{background:#fff7e9}#result[data-kind="uncertain"]{background:#eff2f7}.badge{display:inline-block;border-radius:20px;background:#e4ecfa;padding:4px 9px;font-size:.8rem}label{display:inline-flex;align-items:center;gap:6px}li{margin:5px 0}a{color:#2459b5}#metrics{font-size:.86rem;white-space:pre-wrap;color:#475569}</style></head><body><main>
+<h1>漢字ゲームβ v2.6 <span class="badge">字体と書写を分けた試作機</span></h1>
+<p class="muted"><b>①文字としての正誤</b> と <b>②書写の改善ヒント</b> を別々に表示します。<b>土・士・山・十・口・川・未・末・日・目・田・回・国・間・道</b> の15文字限定。文化庁の指針に沿った正式な採点ではなく、筆跡の構造から判定する研究用の試作機です。</p>
+<section class="card"><div class="controls"><label>出題 <select id="target"><option>土</option><option>士</option><option>山</option><option>十</option><option>口</option><option>川</option><option>未</option><option>末</option><option>日</option><option>目</option><option>田</option><option>回</option><option>国</option><option>間</option><option>道</option></select></label><button id="clear">消す</button><button id="undo">一画戻す</button></div><div class="pad"><canvas id="pad" width="600" height="600" aria-label="漢字を手書きする場所"></canvas></div><div class="controls"><button id="judge" class="primary">構造で判定</button><button id="save">JSONを保存</button></div><p id="result" aria-live="polite">まず「土」を書いて「構造で判定」を押してください。</p><p class="muted">※「正解」は文字の骨組みに関する暫定判定です。楷書の美しさや公的な合否基準を意味しません。</p><details><summary>検出した構造の数値を見る</summary><pre id="metrics"></pre></details></section>
+<section class="card"><h2>以前の版に戻る</h2><p class="muted">v2.3・v2.4・v2.5は変更していません。いつでも元の判定に戻れます。</p><p><a href="./kanji-structure-v2.5.html">v2.5を開く</a> ／ <a href="./kanji-structure-v2.4.html">v2.4を開く</a> ／ <a href="./kanji-structure-v2.3.html">v2.3を開く</a></p></section>
+<section class="card"><h2>過去の筆跡でも再判定できます</h2><p class="muted">以前のバージョンで保存したJSONを選ぶと、同じ筆跡をこの新方式で評価します。画面内で処理し、サーバーには送信しません。</p><input type="file" id="import" accept=".json,application/json"></section>
+<section class="card muted"><b>試作機の仕様</b><ul><li>土・士：画数、横・縦・横の方向、2か所の交差、横線の長さの大小、上下配置を検査</li><li>山：左の縦・折れ・右の縦の構成、縦部分の相対長、下側のつながり、異常な曲がりを検査</li><li>十：2画の交差と位置を確認</li><li>口：左縦・上から右へ折れる画・下横の3画と四隅のつながりを確認</li><li>川：3本の縦画の左右順序と長さを確認</li><li>未・末：5画の構造、横画の長短、縦画の交差、左右の払いを確認</li><li>日・目：4画／5画の違い、囲み、内部の横画の本数と配置を確認</li><li>田：5画、囲みと縦横の仕切りを確認</li><li>回：6画、外側と内側の二重囲みを確認</li><li>国：8画、囲みと玉の配置を確認</li><li>間：12画、門と日の左右・内外の配置を確認（保守的な初期判定）</li><li>道：12画、首としんにょうの配置を確認（保守的な初期判定）</li><li>文字としての正誤と、字形を整えるための助言を別枠で示します</li><li>漢字認識AIではありません。15文字以外の認識、書体差の十分な検証、複雑な漢字への一般化は未実装</li></ul><p>線の交差には折れ線の距離を用い、わずかな隙間には文字サイズに比例した許容幅を設定しています。</p></section>
+</main><script>
+'use strict';const $=s=>document.getElementById(s);let strokes=[],cur=null,lastReport='';const cvs=$('pad'),ctx=cvs.getContext('2d');const len=(a,b)=>Math.hypot(a.x-b.x,a.y-b.y);const clamp=(x,a,b)=>Math.max(a,Math.min(b,x));
+function point(e){let b=cvs.getBoundingClientRect();return{x:(e.clientX-b.left)*600/b.width,y:(e.clientY-b.top)*600/b.height,t:Date.now(),pressure:e.pressure??0}}
+function paint(){ctx.clearRect(0,0,600,600);ctx.lineWidth=7;ctx.lineCap=ctx.lineJoin='round';ctx.strokeStyle='#2459b5';for(let s of [...strokes,...(cur?[cur]:[])]){if(!s.length)continue;ctx.beginPath();ctx.moveTo(s[0].x,s[0].y);for(let q of s.slice(1))ctx.lineTo(q.x,q.y);ctx.stroke()}}
+cvs.addEventListener('pointerdown',e=>{e.preventDefault();cvs.setPointerCapture(e.pointerId);cur=[point(e)];paint()});cvs.addEventListener('pointermove',e=>{if(!cur)return;e.preventDefault();let p=point(e);if(len(p,cur[cur.length-1])>=1)cur.push(p);paint()});function end(e){if(!cur)return;e.preventDefault();strokes.push(cur);cur=null;paint();$('result').textContent=`${strokes.length}画を書きました。構造で判定できます。`;delete $('result').dataset.kind}cvs.addEventListener('pointerup',end);cvs.addEventListener('pointercancel',end);
+function resample(s,n=55){if(s.length<2)return Array(n).fill(s[0]);let ds=[0];for(let i=1;i<s.length;i++)ds.push(ds[i-1]+len(s[i],s[i-1]));let out=[],k=1;for(let i=0;i<n;i++){let t=ds.at(-1)*i/(n-1);while(k<ds.length-1&&ds[k]<t)k++;let f=(t-ds[k-1])/(ds[k]-ds[k-1]||1);out.push({x:s[k-1].x*(1-f)+s[k].x*f,y:s[k-1].y*(1-f)+s[k].y*f})}return out}
+const bounds=s=>{let p=s.flat(),xs=p.map(q=>q.x),ys=p.map(q=>q.y);return {xmin:Math.min(...xs),xmax:Math.max(...xs),ymin:Math.min(...ys),ymax:Math.max(...ys)}};
+function bstroke(s){let x=s.map(p=>p.x),y=s.map(p=>p.y);return{xmin:Math.min(...x),xmax:Math.max(...x),ymin:Math.min(...y),ymax:Math.max(...y),w:Math.max(...x)-Math.min(...x),h:Math.max(...y)-Math.min(...y),cx:(Math.max(...x)+Math.min(...x))/2,cy:(Math.max(...y)+Math.min(...y))/2}}
+function segdist(p,a,b){let dx=b.x-a.x,dy=b.y-a.y,t=clamp(((p.x-a.x)*dx+(p.y-a.y)*dy)/(dx*dx+dy*dy||1),0,1);return len(p,{x:a.x+t*dx,y:a.y+t*dy})}
+function mindist(a,b){let d=Infinity;for(let p of a)for(let i=1;i<b.length;i++)d=Math.min(d,segdist(p,b[i-1],b[i]));for(let p of b)for(let i=1;i<a.length;i++)d=Math.min(d,segdist(p,a[i-1],a[i]));return d}
+function vertPart(s){let b=bstroke(s);let pts=s.filter(p=>p.y<=b.ymin+b.h*.4);return {height:b.h,top:b.ymin,low:b.ymax}}
+function check(st,target){let data={target,strokes:st.length,checks:[],warnings:[],advice:[],metrics:{}};let bad=x=>data.checks.push(x),warn=x=>data.warnings.push(x),advise=x=>data.advice.push(x);const needed=({十:2,未:5,末:5,日:4,目:5,田:5,回:6,国:8,間:12,道:12})[target]||3;if(st.length!==needed){bad(`${needed}画の漢字ですが、入力は${st.length}画です。`);return {...data,kind:'retry'}}
+const bb=bounds(st),W=Math.max(bb.xmax-bb.xmin,1),H=Math.max(bb.ymax-bb.ymin,1),scale=Math.max(W,H),s=st.map(x=>resample(x)),b=s.map(bstroke),d=(i,j)=>mindist(s[i],s[j])/scale;const dx=i=>s[i].at(-1).x-s[i][0].x,dy=i=>s[i].at(-1).y-s[i][0].y;data.metrics={全体幅:Math.round(W),全体高さ:Math.round(H)};
+if(['田','回','国','間','道'].includes(target)){
+ // Version 2.6: component-level preliminary checks. Complex characters are reviewed conservatively.
+ const G=(i,j)=>Number(d(i,j).toFixed(3)), inside=(part,container,margin=.15)=>part.cx>container.xmin-margin*scale&&part.cx<container.xmax+margin*scale&&part.cy>container.ymin-margin*scale&&part.cy<container.ymax+margin*scale;
+ const subset=ids=>bstroke(ids.flatMap(i=>s[i]));
+ if(target==='田'){
+  // First two strokes enclose top and sides, third vertical partition, fourth horizontal partition, fifth bottom.
+  const frame=subset([0,1,4]),v=b[2],h=b[3];
+  data.metrics={...data.metrics,囲み横幅比:Number((frame.w/W).toFixed(2)),内部縦画長さ比:Number((v.h/H).toFixed(2)),内部横画長さ比:Number((h.w/W).toFixed(2)),縦横交差距離:G(2,3)};
+  if(b[0].h<b[0].w*1.2)bad('1画目の左側が縦画になっていません。');
+  if(b[1].w<W*.53||b[1].h<H*.52)bad('2画目の上辺から右辺への折れが不足しています。');
+  if(b[4].w<W*.5||b[4].h>b[4].w*.7)bad('5画目の下辺が不足しています。');
+  if(v.h<H*.35||v.w>v.h*.65)bad('内部の縦の仕切りが不足しています。');
+  if(h.w<W*.36||h.h>h.w*.7)bad('内部の横の仕切りが不足しています。');
+  if(!inside(v,frame)||!inside(h,frame))bad('内部の仕切りが囲みから外れています。');
+  if(d(2,3)>.16)bad('内部の縦横の仕切りが離れすぎています。');
+  else if(d(2,3)>.075)advise('中央の縦横を少し近づけると整います。');
+  if(d(0,4)>.23||d(1,4)>.23)bad('下辺と左右の辺が大きく離れています。');
+ }else if(target==='回'){
+  const outer=subset([0,1,5]),inner=subset([2,3,4]);
+  data.metrics={...data.metrics,内側の幅比:Number((inner.w/W).toFixed(2)),内側の高さ比:Number((inner.h/H).toFixed(2)),内外の中心距離:Number(Math.hypot(inner.cx-outer.cx,inner.cy-outer.cy)/scale).toFixed(3)};
+  if(b[0].h<b[0].w*1.2||b[1].w<W*.55||b[1].h<H*.55||b[5].w<W*.5)bad('外側の囲みの基本形が不足しています。');
+  if(b[2].h<b[2].w*1.1||b[3].w<inner.w*.6||b[3].h<inner.h*.5||b[4].w<inner.w*.55)bad('内側の口の基本形が不足しています。');
+  if(inner.w<.19*W||inner.h<.19*H)bad('内側の口が極端に小さいです。');
+  if(inner.xmin<outer.xmin+.035*W||inner.xmax>outer.xmax-.035*W||inner.ymin<outer.ymin+.035*H||inner.ymax>outer.ymax-.035*H)bad('内側の口が外枠の外にはみ出しています。');
+  if(d(2,4)>.24||d(3,4)>.24)advise('内側の口の角を少し近づけると整います。');
+ }else if(target==='国'){
+  // Outside enclosure strokes 1,2,8 and 玉 strokes 3..7.
+  const outer=subset([0,1,7]),inner=subset([2,3,4,5,6]);
+  data.metrics={...data.metrics,内側の幅比:Number((inner.w/W).toFixed(2)),内側の高さ比:Number((inner.h/H).toFixed(2)),内側の画数:5};
+  if(b[0].h<b[0].w*1.2||b[1].w<W*.55||b[1].h<H*.55||b[7].w<W*.5)bad('外側の囲みの基本形が不足しています。');
+  if(b[2].w<W*.25||b[3].w<W*.25||b[5].w<W*.25||b[4].h<H*.25)bad('内側の玉の縦横の骨組みが不足しています。');
+  if(inner.xmin<outer.xmin-.07*W||inner.xmax>outer.xmax+.07*W||inner.ymin<outer.ymin-.07*H||inner.ymax>outer.ymax+.07*H)bad('内側の玉が外枠から大きくはみ出しています。');
+  if(b[6].w>.37*W||b[6].h>.37*H)advise('玉の点の大きさを見直すと整います。');
+ }else if(target==='間'){
+  // 門(1..8) surrounds 日(9..12). Confirm gross placement without making font geometry a hard requirement.
+  const gate=subset([0,1,2,3,4,5,6,7]),sun=subset([8,9,10,11]);
+  data.metrics={...data.metrics,門の幅比:Number((gate.w/W).toFixed(2)),日の幅比:Number((sun.w/W).toFixed(2)),日の高さ比:Number((sun.h/H).toFixed(2))};
+  if(gate.w<W*.54||gate.h<H*.48)bad('門の外形が極端に小さいです。');
+  if(sun.w<W*.15||sun.h<H*.15)bad('内部の日が極端に小さいです。');
+  if(sun.cx<gate.xmin-.1*W||sun.cx>gate.xmax+.1*W||sun.cy<gate.ymin-.1*H||sun.cy>gate.ymax+.1*H)bad('日が門から大きく外れています。');
+  if(sun.w>gate.w*.83||sun.h>gate.h*.89)advise('門と日の間に少し余白を作ると整います。');
+  warn('複雑な「門」の各折れと内側の「日」の細部は、現在の試作では未検証です。');
+ }else if(target==='道'){
+  // 首(1..9), 辶(10..12); only major position / proportions until real handwriting is collected.
+  const head=subset([0,1,2,3,4,5,6,7,8]),walk=subset([9,10,11]);
+  data.metrics={...data.metrics,首の幅比:Number((head.w/W).toFixed(2)),しんにょうの幅比:Number((walk.w/W).toFixed(2)),しんにょうの下端比:Number(((walk.ymax-bb.ymin)/H).toFixed(2))};
+  if(head.w<W*.22||head.h<H*.22)bad('首の部分が極端に小さいです。');
+  if(walk.w<W*.3||walk.h<H*.3)bad('しんにょうの大きさが不足しています。');
+  if(walk.ymax<head.ymax-.20*H)bad('しんにょうが首の下側に届いていません。');
+  if(walk.xmin>head.cx+.15*W)bad('しんにょうが首の左側から大きく離れています。');
+  warn('複雑な「首」と「しんにょう」の各画の細部は、現在の試作では未検証です。');
+ }
+}else if(target==='未'||target==='末'){
+ // Stroke order: top horizontal, second horizontal, central vertical, left sweep, right sweep.
+ const top=b[0],low=b[1],v=b[2],left=b[3],right=b[4],ratio=top.w/Math.max(low.w,1);
+ data.metrics={...data.metrics,上横対下横の長さ比:Number(ratio.toFixed(2)),上横と縦画の距離:Number(d(0,2).toFixed(3)),下横と縦画の距離:Number(d(1,2).toFixed(3))};
+ for(let i of [0,1]){if(b[i].w<b[i].h*1.4)bad(`${i+1}画目は横線として書いてください。`);}
+ if(top.cy>low.cy-.075*scale)bad('2本の横線の上下関係が不明瞭です。');
+ if(v.h<v.w*1.35)bad('3画目は中央の縦画として書いてください。');
+ for(let i of [0,1]){if(d(i,2)>.15)bad(`${i+1}画目の横線と中央の縦画が大きく離れています。`);else if(d(i,2)>.06)advise(`${i+1}画目の横線と縦画をもう少し近づけると整います。`)}
+ if(v.cx<Math.min(top.xmin,low.xmin)-.07*scale||v.cx>Math.max(top.xmax,low.xmax)+.07*scale)bad('中央の縦画の位置が横線からずれています。');
+ if(dx(3)>-.1*scale||dy(3)<.1*scale)bad('4画目は左下へ払う形にしてください。');
+ if(dx(4)<.1*scale||dy(4)<.1*scale)bad('5画目は右下へ払う形にしてください。');
+ if(Math.min(d(2,3),d(1,3))>.22)bad('左払いが中央部分から大きく離れています。');
+ if(Math.min(d(2,4),d(1,4))>.22)bad('右払いが中央部分から大きく離れています。');
+ if(target==='未'){
+  if(ratio>1.22)bad('上の横線が下よりかなり長く、「末」に近い形です。');
+  else if(ratio>.92)warn('横線の長さが近く、「未」と「末」の区別が曖昧です。');
+ }else{
+  if(ratio<.82)bad('下の横線が上よりかなり長く、「未」に近い形です。');
+  else if(ratio<1.12)warn('横線の長さが近く、「末」と「未」の区別が曖昧です。');
+ }
+}else if(target==='日'||target==='目'){
+ // 1: left vertical, 2: top horizontal and right vertical, interior strokes, last: bottom horizontal.
+ const left=s[0],fold=s[1],last=st.length-1,base=s[last],a=left[0],z=left.at(-1),c0=fold[0],c1=fold.at(-1),bot0=base[0],bot1=base.at(-1);
+ const gap=(p,q)=>len(p,q)/scale,innerCount=target==='目'?2:1;
+ data.metrics={...data.metrics,左上接続距離:Number(gap(a,c0).toFixed(3)),左下接続距離:Number(gap(z,bot0).toFixed(3)),右下接続距離:Number(gap(c1,bot1).toFixed(3)),内部横画数:innerCount};
+ if(b[0].h<b[0].w*1.4)bad('1画目は左の縦線として書いてください。');
+ if(b[1].w<W*.57||b[1].h<H*.60)bad('2画目の上から右下への折れが不足しています。');
+ if(c0.x>b[1].xmin+.25*W||c0.y>b[1].ymin+.25*H)bad('2画目は左上から右へ進み、右下へ折れてください。');
+ if(c1.x<b[1].xmax-.27*W||c1.y<b[1].ymax-.28*H)bad('2画目の右への折れが不明瞭です。');
+ if(b[last].w<W*.55||b[last].w<b[last].h*1.5||dx(last)<.3*W)bad('最後の画は下側の横線として書いてください。');
+ for(let i=2;i<last;i++){
+  if(b[i].w<W*.43||b[i].w<b[i].h*1.4)bad(`${i+1}画目は内部の横線として書いてください。`);
+  if(b[i].cy<b[1].ymin+.13*H||b[i].cy>b[last].cy-.09*H)bad(`${i+1}画目の内部の横線が囲みの外側にあります。`);
+  let leftEdge=Math.min(b[0].cx,b[1].xmin),rightEdge=b[1].xmax;
+  if(b[i].xmax<leftEdge+.43*W||b[i].xmin>rightEdge-.43*W)bad(`${i+1}画目の内部の横線の位置がずれています。`);
+ }
+ if(target==='目'&&b[2].cy>b[3].cy-.08*H)bad('「目」の2本の内部横線が近すぎます。');
+ if(b[last].cy<b[1].ymin+.55*H)bad('囲みの下側の位置が高すぎます。');
+ for(const [name,g] of [['左上',gap(a,c0)],['左下',gap(z,bot0)],['右下',gap(c1,bot1)]]){
+  if(g>.22)bad(`${name}の角が大きく離れています。`);else if(g>.12)advise(`${name}の角をもう少し近づけると整います。`)
+ }
+}else if(target==='十'){
+ const cross=d(0,1);data.metrics={...data.metrics,交差距離:Number(cross.toFixed(3))};
+ if(b[0].w<b[0].h*1.5)bad('1画目は横線として書いてください。');
+ if(b[1].h<b[1].w*1.5)bad('2画目は縦線として書いてください。');
+ if(cross>.12)bad('横線と縦線が大きく離れています。');else if(cross>.045)advise('横線と縦線をもう少し近づけましょう。');
+ if(b[1].cx<b[0].xmin+.18*b[0].w||b[1].cx>b[0].xmax-.18*b[0].w)bad('縦線が横線の端に寄りすぎています。');
+ if(b[0].cy<b[1].ymin+.12*b[1].h||b[0].cy>b[1].ymax-.12*b[1].h)bad('横線が縦線の端に寄りすぎています。');
+ }else if(target==='川'){
+ const widths=b.map(x=>x.w/Math.max(x.h,1)),heights=b.map(x=>x.h/H);data.metrics={...data.metrics,縦画長さ比:heights.map(x=>Number(x.toFixed(2))),横ぶれ比:widths.map(x=>Number(x.toFixed(2)))};
+ for(let i=0;i<3;i++){if(widths[i]>.48)bad(`${i+1}画目が縦方向になっていません。`);if(heights[i]<.30)bad(`${i+1}画目が極端に短く、川の縦画として認めにくいです。`);else if(heights[i]<.46)advise(`${i+1}画目を少し長くすると整います。`);}
+ if(!(b[0].cx<b[1].cx&&b[1].cx<b[2].cx))bad('3本の縦線を左から右の順に並べてください。');
+ if(Math.min(b[1].cx-b[0].cx,b[2].cx-b[1].cx)<W*.12)bad('縦線同士が近すぎます。');
+ if(Math.max(...b.map(x=>x.ymax))-Math.min(...b.map(x=>x.ymax))>H*.36)advise('3本の下端の高さをもう少しそろえると整います。');
+ }else if(target==='口'){
+ // Stroke 1: left down, stroke 2: top right then down, stroke 3: bottom right.
+ const left=s[0],corner=s[1],bottom=s[2],a=left[0],z=left.at(-1),c0=corner[0],c1=corner.at(-1),bot0=bottom[0],bot1=bottom.at(-1);
+ const tol=.085*scale;const gap=(p,q)=>len(p,q)/scale;const leftH=b[0].h/H,rightH=b[1].h/H;
+ data.metrics={...data.metrics,左縦長さ比:Number(leftH.toFixed(2)),右側の縦方向比:Number(rightH.toFixed(2)),右上折れ画の幅比:Number((b[1].w/W).toFixed(2)),左下接続距離:Number(gap(z,bot0).toFixed(3)),右下接続距離:Number(gap(c1,bot1).toFixed(3)),左上接続距離:Number(gap(a,c0).toFixed(3))};
+ if(b[0].h<b[0].w*1.45)bad('1画目の左側を縦方向に書いてください。');
+ if(b[1].w<W*.58||b[1].h<H*.55)bad('2画目の上側から右下への折れが不足しています。');
+ if(b[2].w<b[2].h*1.8||b[2].w<W*.55)bad('3画目の下の横線が短すぎるか、横方向になっていません。');
+ // Validate corner direction: start at upper left and travel right then down.
+ if(c0.x>b[1].xmin+.2*W||c0.y>b[1].ymin+.2*H)bad('2画目は左上から右へ進み、下へ折れてください。');
+ if(c1.x<b[1].xmax-.22*W||c1.y<b[1].ymax-.2*H)bad('2画目の右下への折れが不明瞭です。');
+ if(bot0.x>bot1.x||b[2].cy<b[0].ymin+.48*H)bad('3画目を下側に左から右へ書いてください。');
+ for(const [name,g] of [['左上',gap(a,c0)],['左下',gap(z,bot0)],['右下',gap(c1,bot1)]]){if(g>.19)bad(`${name}の角が大きく離れていて、囲みが成立しにくいです。`);else if(g>.115)advise(`${name}の角をもう少しつなげると整います。`)}
+ if(b[1].xmax-b[0].cx<W*.4)bad('四角形の横幅が不足しています。');
+ }else if(target==='土'||target==='士'){
+ const r=b[2].w/Math.max(b[0].w,1);data.metrics={...data.metrics,上下横線長さ比:Number(r.toFixed(2)),上横線と縦線の最短距離:Number(d(0,1).toFixed(3)),下横線と縦線の最短距離:Number(d(1,2).toFixed(3))};
+ if(Math.abs(dx(0))<b[0].h*1.3 || Math.abs(dx(2))<b[2].h*1.3)bad('横線が横方向になっていません。');
+ if(b[1].h<b[1].w*1.4)bad('2画目の縦線が縦方向になっていません。');
+ if(b[0].cy>b[2].cy-.08*scale)bad('上下の横線の位置関係が不明瞭です。');
+ if(d(0,1)>.12)bad('上の横線と縦線が大きく離れています。');else if(d(0,1)>.045)advise('上の横線と縦線をもう少し近づけると、より整った字になります。');
+ if(d(1,2)>.12)bad('下の横線と縦線が大きく離れています。');else if(d(1,2)>.045)advise('下の横線と縦線をもう少し近づけると、より整った字になります。');
+ const top=b[0].cy,bot=b[2].cy;if(b[1].ymax<bot-.13*scale)bad('縦線が下の横線まで大きく届いていません。');else if(b[1].ymax<bot-.04*scale)advise('縦線を下の横線まで少し長くすると、より整った字になります。');
+ if(b[1].ymin>top+.13*scale)bad('縦線が上の横線まで大きく届いていません。');else if(b[1].ymin>top+.04*scale)advise('縦線を上の横線まで少し伸ばすと、より整った字になります。');
+ if(target==='土'){if(r<.85)bad('下の横線が上よりかなり短く、「士」に近い形です。');else if(r<1.08)warn('上下の横線の長さが近く、「土」と「士」の区別が曖昧です。')}
+ else {if(r>1.17)bad('下の横線が上より長く、「土」に近い形です。');else if(r>.93)warn('上下の横線の長さが近く、「士」と「土」の区別が曖昧です。')}
+ // Contact should occur near the interior of the horizontal strokes rather than at their extreme ends.
+ for(let i of [0,2]){let v=b[1].cx;if(v<b[i].xmin-.065*scale||v>b[i].xmax+.065*scale)bad(`${i+1}画目の横線と縦線の左右位置がずれています。`)}
+}else if(target==='山'){
+ const ratio2=b[1].h/H,ratio3=b[2].h/H,ratio1=b[0].w/Math.max(b[0].h,1);data.metrics={...data.metrics,'2画目の縦方向の広がり':Number(ratio2.toFixed(2)),'3画目の縦方向の広がり':Number(ratio3.toFixed(2)),'1画目の横ぶれ比':Number(ratio1.toFixed(2)),'1・2画目の距離':Number(d(0,1).toFixed(3)),'2・3画目の距離':Number(d(1,2).toFixed(3))};
+ if(b[0].h<H*.35)bad('1画目の縦方向の長さが短すぎます。');
+ if(ratio1>.33)bad('1画目が横方向に大きく曲がっています。');else if(ratio1>.22)advise('1画目が少し横方向に曲がっています。');
+ if(b[1].w<W*.48)bad('2画目の横方向の部分が短すぎます。');
+ if(ratio2<.18)bad('2画目の縦方向の部分が極端に短いです。');else if(ratio2<.26)advise('2画目の縦方向の部分が短めです。');
+ if(ratio3<.20)bad('3画目の縦線が極端に短いです。');else if(ratio3<.27)advise('3画目の縦線が短めです。');
+ if(b[2].h<b[2].w*1.3)bad('3画目が縦線になっていません。');
+ if(d(0,1)>.09)bad('左の部分と下側が離れています。');
+ if(d(1,2)>.09)bad('右の部分と下側が離れています。');
+ if(b[2].cx<b[0].cx+.34*W)bad('右の縦線が左に寄りすぎています。');
+ if(b[0].ymax<b[1].ymax-.12*H||b[2].ymax<b[1].ymax-.12*H)bad('下側の線が適切につながっていません。');
+}
+return {...data,kind:data.checks.length?'retry':data.warnings.length?'uncertain':data.advice.length?'advice':'ok'} }
+function judge(){if(!strokes.length){$('result').textContent='文字を書いてください。';return}let target=$('target').value,r=check(strokes,target);
+ const identity={ok:'⭕ 正解',advice:'⭕ 正解',uncertain:'🔎 判定保留',retry:'✏️ 再挑戦'}[r.kind];
+ let lines=['【① 文字としての判定】',identity];
+ if(r.checks.length)lines.push(...r.checks.map(x=>'・'+x));
+ else if(r.warnings.length)lines.push(...r.warnings.map(x=>'・'+x));
+ else lines.push('骨組み・画の構成は許容範囲です。');
+ lines.push('','【② 書写の改善ヒント】');
+ if(r.advice.length)lines.push(...r.advice.map(x=>'・'+x));else lines.push('今回の検査で、追加の助言はありません。');
+ lines.push('','※独自の試験的判定です。書体や個人差を完全には評価できず、公的な採点基準でもありません。');
+ lastReport=lines.join('\n');$('result').textContent=lastReport;$('result').dataset.kind=r.kind;$('metrics').textContent=JSON.stringify(r.metrics,null,2);return r}
+$('judge').onclick=judge;$('clear').onclick=()=>{strokes=[];cur=null;paint();$('result').textContent='消しました。もう一度書けます。';$('metrics').textContent=''};$('undo').onclick=()=>{strokes.pop();paint();$('result').textContent=`${strokes.length}画を書きました。`};$('target').onchange=()=>{$('clear').click()};
+$('import').onchange=async e=>{let f=e.target.files[0];if(!f)return;try{let v=JSON.parse(await f.text());if(!Array.isArray(v.strokes))throw Error('strokesがありません');if(!['土','士','山','十','口','川','未','末','日','目','田','回','国','間','道'].includes(v.target))throw Error('対応している15文字のJSONを選んでください');$('target').value=v.target;strokes=v.strokes;paint();judge();$('result').textContent='過去のJSONを構造方式で再判定しました：'+f.name+'\n\n'+$('result').textContent}catch(err){$('result').textContent='読み込みエラー：'+err.message}e.target.value=''};
+$('save').onclick=()=>{let r=strokes.length?check(strokes,$('target').value):null;let data={schema:'kanji-structure-v2.6',target:$('target').value,createdAt:new Date().toISOString(),canvas:{width:600,height:600},diagnostic:lastReport,structuralResult:r,evaluation:{identity:r?(r.kind==='retry'?'retry':r.kind==='uncertain'?'uncertain':'ok'):null,handwritingAdvice:r?r.advice:[]},strokes};let url=URL.createObjectURL(new Blob([JSON.stringify(data,null,2)],{type:'application/json'})),a=document.createElement('a');a.href=url;a.download='kanji-structure-'+$('target').value+'-'+Date.now()+'.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000)};
+</script></body></html>
