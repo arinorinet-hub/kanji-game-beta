@@ -1,0 +1,282 @@
+<!doctype html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>漢字ゲーム β v6.5 試作版</title><style>
+@import url("https://fonts.googleapis.com/css2?family=Klee+One:wght@400&display=swap");
+:root{font-family:system-ui,'Hiragino Kaku Gothic ProN','Yu Gothic',sans-serif;color:#1a2834;background:#f5f7fa}body{margin:0}.shell{max-width:850px;margin:32px auto;padding:0 18px}h1{font-size:26px}p{line-height:1.7;color:#4e6171}.wrap{display:grid;grid-template-columns:minmax(0,1fr) 270px;gap:20px}.panel{background:white;border:1px solid #dde4eb;border-radius:16px;padding:16px}#pad{width:100%;background:#fff;display:block;touch-action:none;cursor:crosshair;border:1px solid #bdc9d4;border-radius:12px;aspect-ratio:1}.toolbar{display:flex;flex-wrap:wrap;gap:8px;margin:12px 0}button,select{background:white;border:1px solid #bdc9d4;padding:9px 13px;border-radius:8px;font:inherit}button{cursor:pointer}button.primary{background:#1f5a91;color:white;border-color:#1f5a91}.result{font-size:21px;font-weight:700;margin:10px 0}.muted{font-size:12px;color:#6d7c88}.score{font-size:30px;font-weight:700}pre{overflow:auto;background:#f5f7fa;border-radius:8px;padding:10px;font-size:12px;white-space:pre-wrap}#model{width:100%;max-width:220px;aspect-ratio:1}.good{color:#18703b}.bad{color:#b32828}.warn{color:#a36311}@media(max-width:650px){.wrap{grid-template-columns:1fr}.shell{margin:15px auto}h1{font-size:22px}}
+</style></head><body><main class="shell"><h1>漢字ゲーム β v6.5 <small style="font-size:13px;color:#777">教科書体近似・検証版</small></h1><p>構造とバランスを独立に採点。バランスの字形参照には教科書体に近い硬筆楷書「Klee One」を暫定採用します（厳密な教科書体ではありません）。書体の読込完了後に採点してください。追加9文字（日・目・回・田・口・十・干・王・牛）は試験運用のため、判定の妥当性を検証中です。</p><div class="toolbar"><label>出題文字 <select id="kanji"><option>末</option><option>未</option><option>土</option><option>士</option><option>日</option><option>目</option><option>回</option><option>田</option><option>口</option><option>十</option><option>干</option><option>王</option><option>牛</option></select></label><button id="undo">1画戻す</button><button id="clear">消す</button><button class="primary" id="judge">採点する</button><button id="export" disabled>診断JSONを保存</button></div><div class="wrap"><section class="panel"><canvas id="pad" width="600" height="600" aria-label="漢字の手書き入力"></canvas><div class="muted">指またはマウスで一画ずつ書いてください。筆順判定は未実装です。</div></section><aside class="panel"><strong>お手本：Klee One（教科書体近似）</strong><p id="fontstatus" class="muted">参照フォントを読み込み中…</p><canvas id="model" width="220" height="220"></canvas><div id="result" class="result">入力待ち</div><div id="subscores" class="muted">構造：—　｜　バランス：—</div><div id="score" class="score">—</div><p id="advice">漢字を書いて「採点する」を押してください。</p><details><summary>診断の詳細</summary><pre id="detail">—</pre></details></aside></div><p class="muted">Klee Oneは正式な学参教科書体ではありません。ネット接続が必要です。参照フォントが未読込のときは採点を行いません。比較スコアは予備指標です。旧版の全機能との互換はありません。追加9文字は試験運用中です。</p></main><script>
+/* Kanji Game v6.5 prototype. Geometry first, then normalized reference balance.
+   Scores/thresholds are provisional and need human calibration. */
+(function(root){'use strict';
+const LOWER_STEM_RULE={'末':'passes','未':'passes','土':'stops','士':'stops'};
+const REF={
+ '末':{count:5, strokes:[[[.12,.24],[.88,.24]],[[.27,.45],[.73,.45]],[[.50,.08],[.50,.91]],[[.50,.46],[.15,.88]],[[.50,.46],[.85,.88]]]},
+ '未':{count:5, strokes:[[[.26,.24],[.74,.24]],[[.12,.45],[.88,.45]],[[.50,.08],[.50,.91]],[[.50,.46],[.15,.88]],[[.50,.46],[.85,.88]]]},
+ '土':{count:3, strokes:[[[.24,.34],[.76,.34]],[[.50,.10],[.50,.84]],[[.12,.83],[.88,.83]]]},
+ '士':{count:3, strokes:[[[.12,.31],[.88,.31]],[[.50,.10],[.50,.85]],[[.27,.83],[.73,.83]]]},
+ '口':{count:3,strokes:[[[.20,.20],[.20,.81]],[[.20,.20],[.80,.20],[.80,.81]],[[.20,.81],[.80,.81]]]},
+ '日':{count:4,strokes:[[[.20,.12],[.20,.90]],[[.20,.12],[.80,.12],[.80,.90]],[[.20,.51],[.80,.51]],[[.20,.90],[.80,.90]]]},
+ '目':{count:5,strokes:[[[.20,.10],[.20,.92]],[[.20,.10],[.80,.10],[.80,.92]],[[.20,.37],[.80,.37]],[[.20,.64],[.80,.64]],[[.20,.92],[.80,.92]]]},
+ '回':{count:6,strokes:[[[.13,.10],[.13,.91]],[[.13,.10],[.87,.10],[.87,.91]],[[.35,.33],[.35,.71]],[[.35,.33],[.65,.33],[.65,.71]],[[.35,.71],[.65,.71]],[[.13,.91],[.87,.91]]]},
+ '田':{count:5,strokes:[[[.14,.11],[.14,.90]],[[.14,.11],[.86,.11],[.86,.90]],[[.50,.12],[.50,.90]],[[.14,.51],[.86,.51]],[[.14,.90],[.86,.90]]]},
+ '十':{count:2,strokes:[[[.15,.38],[.85,.38]],[[.50,.12],[.50,.90]]]},
+ '干':{count:3,strokes:[[[.28,.17],[.72,.17]],[[.14,.47],[.86,.47]],[[.50,.17],[.50,.91]]]},
+ '王':{count:4,strokes:[[[.22,.18],[.78,.18]],[[.50,.18],[.50,.85]],[[.24,.51],[.76,.51]],[[.12,.85],[.88,.85]]]},
+ '牛':{count:4,strokes:[[[.35,.16],[.22,.40]],[[.22,.40],[.78,.40]],[[.15,.64],[.85,.64]],[[.52,.10],[.52,.92]]]}
+};
+const clamp=(v,a=0,b=1)=>Math.max(a,Math.min(b,v));
+const rnd=(n)=>Math.round(n*1000)/1000;
+const hypot=(a,b)=>Math.hypot(a.x-b.x,a.y-b.y);
+function interpolate(poly,n=45){if(poly.length===0)return[];if(poly.length===1)return Array(n).fill(poly[0]);let lens=[],tot=0;for(let i=1;i<poly.length;i++){const d=hypot(poly[i-1],poly[i]);lens.push(d);tot+=d;}if(!tot)return Array(n).fill(poly[0]);let result=[];for(let j=0;j<n;j++){let target=tot*j/(n-1),k=0;while(k<lens.length-1&&target>lens[k])target-=lens[k++];let t=lens[k]?target/lens[k]:0;result.push({x:poly[k].x*(1-t)+poly[k+1].x*t,y:poly[k].y*(1-t)+poly[k+1].y*t});}return result;}
+function normalize(strokes){const all=strokes.flat();if(!all.length)return {strokes:[],bounds:null};const minX=Math.min(...all.map(p=>p.x)),maxX=Math.max(...all.map(p=>p.x)),minY=Math.min(...all.map(p=>p.y)),maxY=Math.max(...all.map(p=>p.y));const w=Math.max(maxX-minX,1e-6),h=Math.max(maxY-minY,1e-6),scale=Math.max(w,h),padX=(scale-w)/2,padY=(scale-h)/2;return {strokes:strokes.map(s=>s.map(p=>({x:(p.x-minX+padX)/scale,y:(p.y-minY+padY)/scale}))),bounds:{minX,maxX,minY,maxY,width:w,height:h,scale}};}
+function closestPointOnSegment(p,a,b){let dx=b.x-a.x,dy=b.y-a.y,d=dx*dx+dy*dy,t=d?clamp(((p.x-a.x)*dx+(p.y-a.y)*dy)/d):0;return {x:a.x+t*dx,y:a.y+t*dy};}
+function pointPolylineDist(p,poly){if(!poly.length)return Infinity;let best=hypot(p,poly[0]);for(let i=1;i<poly.length;i++)best=Math.min(best,hypot(p,closestPointOnSegment(p,poly[i-1],poly[i])));return best;}
+function polyDist(a,b){if(!a.length||!b.length)return Infinity;return Math.min(...interpolate(a,70).map(p=>pointPolylineDist(p,b)),...interpolate(b,70).map(p=>pointPolylineDist(p,a)));}
+function hWidth(s){return Math.max(...s.map(p=>p.x))-Math.min(...s.map(p=>p.x));}
+function height(s){return Math.max(...s.map(p=>p.y))-Math.min(...s.map(p=>p.y));}
+function center(s){return {x:s.reduce((x,p)=>x+p.x,0)/s.length,y:s.reduce((y,p)=>y+p.y,0)/s.length};}
+function direction(s){let a=s[0],b=s[s.length-1];return {dx:b.x-a.x,dy:b.y-a.y};}
+function roles(strokes,char){let ar=strokes.map((s,i)=>({s,i,c:center(s),d:direction(s),w:hWidth(s),h:height(s)}));let horizontals=ar.filter(o=>o.w>o.h*1.55).sort((a,b)=>a.c.y-b.c.y);let verticals=ar.filter(o=>o.h>o.w*1.55).sort((a,b)=>b.h-a.h);if(char==='末'||char==='未'){if(horizontals.length<2||verticals.length<1)return null;let upper=horizontals[0],lower=horizontals[1],v=verticals[0],used=new Set([upper.i,lower.i,v.i]);let branches=ar.filter(o=>!used.has(o.i)).sort((a,b)=>a.c.x-b.c.x);return {upper,lower,v,branches,horizontals,verticals};}if(horizontals.length<2||verticals.length<1)return null;return {upper:horizontals[0],lower:horizontals[1],v:verticals[0],branches:[],horizontals,verticals};}
+function intersectionAtY(v,y){for(let i=1;i<v.s.length;i++){let a=v.s[i-1],b=v.s[i];if(y>=Math.min(a.y,b.y)&&y<=Math.max(a.y,b.y)){let t=(y-a.y)/(b.y-a.y||1);return {x:a.x+(b.x-a.x)*t,y};}}return {x:v.c.x,y};}
+function chamfer(a,b){let p=a.flatMap(s=>interpolate(s,26)),q=b.flatMap(s=>interpolate(s,26));if(!p.length||!q.length)return 0;let da=p.reduce((s,x)=>s+pointPolylineDist(x,q),0)/p.length,db=q.reduce((s,x)=>s+pointPolylineDist(x,p),0)/q.length;return clamp(100*(1-(da+db)/2/.22),0,100);}
+// Fontworks Klee One, a textbook-like handwritten kaisho (NOT a certified textbook font).
+// Font files are never packaged. The glyph is rasterized in the browser on demand.
+let FONT_SAMPLES={};
+function setFontReference(char,points){if(REF[char]&&Array.isArray(points)&&points.length>50)FONT_SAMPLES[char]=points;}
+function sampledFontFit(strokes,char){const target=FONT_SAMPLES[char];if(!target)return null;
+ const input=normalize(strokes).strokes.flatMap(st=>interpolate(st,28));if(!input.length)return 0;
+ const xy=(p,arr)=>{let best=Infinity;for(const q of arr){let dd=(p.x-q.x)**2+(p.y-q.y)**2;if(dd<best)best=dd;}return Math.sqrt(best);};
+ const a=input.reduce((z,p)=>z+xy(p,target),0)/input.length;
+ const b=target.reduce((z,p)=>z+xy(p,input),0)/target.length;
+ return rnd(clamp(100*(1-(a+b)/2/.22),0,100));}
+function prototypeFit(strokes,char){let model=REF[char].strokes.map(s=>s.map(p=>({x:p[0],y:p[1]})));let n=normalize(strokes).strokes; // normalize both to stroke bounding squares
+let base=normalize(model).strokes;let best=0;for(let sx of [.94,1,1.06])for(let sy of [.94,1,1.06]){let adjusted=base.map(s=>s.map(p=>({x:(p.x-.5)*sx+.5,y:(p.y-.5)*sy+.5})));best=Math.max(best,chamfer(n,adjusted));}return rnd(best);}
+
+// v6.5 expanded structural checks, independent of stroke-order judgement.
+const BOX_CHARS=new Set(['口','日','目','回','田']);
+const CROSS_CHARS=new Set(['十','干','王','牛']);
+function evalAdditional(char,strokeInput){
+ let strokes=strokeInput.filter(s=>Array.isArray(s)&&s.length>1).map(s=>s.map(p=>({x:+p.x,y:+p.y})).filter(p=>Number.isFinite(p.x)&&Number.isFinite(p.y)));
+ const n=normalize(strokes), ss=n.strokes, expected=REF[char].count, faults=[],balanceReasons=[],metrics={};
+ const issue=(code,sev,msg)=>faults.push({code,severity:sev,message:msg});
+ let cap=100;
+ const balance=(limit,msg)=>{cap=Math.min(cap,limit);balanceReasons.push(msg);};
+ if(strokes.length!==expected){issue('stroke_count','wrong_structure',`「${char}」は${expected}画です。${strokes.length}画が記録されました。`);balance(43,'画数が違うため字形のまとまりが不足しています。');}
+ if(!n.bounds || !ss.length){issue('empty','wrong_structure','字形が確認できません。');balance(0,'字形を確認できません。');}
+ if(n.bounds && ss.length){
+ const aa=ss.map((s,i)=>({i,s,w:hWidth(s),h:height(s),c:center(s),minX:Math.min(...s.map(p=>p.x)),maxX:Math.max(...s.map(p=>p.x)),minY:Math.min(...s.map(p=>p.y)),maxY:Math.max(...s.map(p=>p.y))}));
+ const isH=o=>o.w>o.h*1.8 && o.w>.17;
+ const isV=o=>o.h>o.w*1.7 && o.h>.17;
+ const dist=(a,b)=>polyDist(a.s,b.s);
+ if(BOX_CHARS.has(char)){
+   const folded=aa.filter(o=>o.w>.36&&o.h>.35).sort((a,b)=>b.w*b.h-a.w*a.h);
+   const outerFold=folded[0];
+   const vert=aa.filter(isV).sort((a,b)=>a.minX-b.minX);
+   const left=vert[0];
+   const hlines=aa.filter(isH).sort((a,b)=>a.c.y-b.c.y);
+   const bottom=hlines.at(-1);
+   if(!outerFold||!left||!bottom||new Set([outerFold.i,left.i,bottom.i]).size!==3){
+     issue('box_frame','wrong_structure','左の縦線・上から右への折れ・下の横線という囲みの基本形がありません。');
+     balance(42,'囲みの縦・横・折れの配置が崩れています。');
+   }else{
+     const box={x0:left.minX,x1:outerFold.maxX,y0:outerFold.minY,y1:Math.max(bottom.maxY,outerFold.maxY)};
+     const bw=box.x1-box.x0,bh=box.y1-box.y0;
+     metrics.outerWidth=rnd(bw);metrics.outerHeight=rnd(bh);
+     metrics.outerBottomGap=rnd(Math.max(dist(left,bottom),dist(outerFold,bottom)));
+     metrics.outerTopGap=rnd(dist(left,outerFold));
+     if(bw<.34||bh<.40){issue('box_size','wrong_structure','外側の囲みが小さすぎます。');balance(42,'囲みの大きさが不足しています。');}
+     if(metrics.outerTopGap>.11||metrics.outerBottomGap>.12){issue('box_disconnect','wrong_structure','囲みの辺が大きく離れています。');balance(43,'外枠の辺がつながらず形が崩れています。');}
+     else if(metrics.outerBottomGap>.052){issue('box_gap','redo','囲みの下端をもう少しつなげましょう。');balance(69,'囲みの下端に隙間があります。');}
+     const inside=aa.filter(o=>![left.i,outerFold.i,bottom.i].includes(o.i));
+     if(char==='日'||char==='目'){
+       const needed=char==='日'?1:2;
+       const internals=inside.filter(isH).sort((a,b)=>a.c.y-b.c.y);
+       if(internals.length!==needed){issue('inner_h_count','wrong_structure',`内側の横線が${needed}本必要です。`);balance(42,'内側の横線の数が違います。');}
+       for(let h of internals){let relY=(h.c.y-box.y0)/Math.max(bh,.001);
+          if(relY<.16||relY>.88 || h.minX<box.x0-.045 ||h.maxX>box.x1+.045 || h.w<bw*.54){issue('inner_position','wrong_structure','内側の横線の位置または長さが不適切です。');balance(43,'内側の横線が囲みの中央付近に収まっていません。');}
+          else if(dist(h,left)>.085||dist(h,outerFold)>.085){issue('inner_connection','redo','内側の横線を左右の辺へ近づけましょう。');balance(69,'内側の横線と左右の辺の間隔が大きいです。');}}
+     }else if(char==='田'){
+       const v=inside.filter(isV),h=inside.filter(isH);
+       if(v.length!==1||h.length!==1){issue('field_partitions','wrong_structure','田の中には縦横1本ずつの仕切りが必要です。');balance(43,'縦横の仕切りが足りません。');}
+       else{const vx=v[0],hy=h[0];metrics.partitionIntersection=rnd(dist(vx,hy));
+         if(dist(vx,hy)>.10){issue('partition_intersection','wrong_structure','内側の縦横の仕切りが交差していません。');balance(43,'内側の仕切りの交点が離れています。');}
+         if(vx.c.x<box.x0+bw*.30||vx.c.x>box.x0+bw*.70||hy.c.y<box.y0+bh*.30||hy.c.y>box.y0+bh*.70){issue('partition_balance','redo','仕切りを囲みの中心付近に配置しましょう。');balance(69,'内側の仕切りが中心から偏っています。');}
+         if(vx.h<bh*.45||hy.w<bw*.48){issue('partition_short','wrong_structure','内側の仕切りが短すぎます。');balance(43,'囲みの内部が均等に分割されていません。');}}
+     }else if(char==='回'){
+       const innerFold=inside.filter(o=>o.w>.14&&o.h>.14).sort((a,b)=>b.w*b.h-a.w*a.h)[0];
+       const inLeft=inside.filter(isV)[0],inBottom=inside.filter(isH).sort((a,b)=>b.c.y-a.c.y)[0];
+       if(!innerFold||!inLeft||!inBottom||new Set([innerFold.i,inLeft.i,inBottom.i]).size!==3){issue('inner_box','wrong_structure','回の内側に「口」の囲みがありません。');balance(43,'内側の囲みが不足しています。');}
+       else{let ix0=inLeft.minX,ix1=innerFold.maxX,iy0=innerFold.minY,iy1=Math.max(inBottom.maxY,innerFold.maxY);metrics.innerWidthRatio=rnd((ix1-ix0)/bw);metrics.innerHeightRatio=rnd((iy1-iy0)/bh);
+         if(ix0<=box.x0+.055||ix1>=box.x1-.055||iy0<=box.y0+.055||iy1>=box.y1-.055){issue('inner_margin','wrong_structure','内側の口が外枠に近すぎるか、外へ出ています。');balance(43,'内側の口と外側の囲みの余白が不足しています。');}
+         if(ix1-ix0<bw*.19||iy1-iy0<bh*.19){issue('inner_tiny','wrong_structure','内側の口が小さすぎます。');balance(43,'内側の口の大きさが釣り合いません。');}
+         if((ix0+ix1)/2<(box.x0+box.x1)/2-bw*.13||(ix0+ix1)/2>(box.x0+box.x1)/2+bw*.13){issue('inner_offcenter','redo','内側の口を左右中央に寄せましょう。');balance(69,'内側の口が左右に偏っています。');}}
+     }
+   }
+ }else if(CROSS_CHARS.has(char)){
+   const horizontals=aa.filter(isH).sort((a,b)=>a.c.y-b.c.y);
+   const verticals=aa.filter(isV).sort((a,b)=>b.h-a.h);
+   const needH=char==='十'?1:char==='干'?2:char==='王'?3:2;
+   if(horizontals.length<needH||!verticals.length){issue('cross_roles','wrong_structure',`「${char}」の横線と縦線の組合せが不足しています。`);balance(43,'必要な横画・縦画の配置が不十分です。');}
+   else{const v=verticals[0],hs=horizontals.slice(0,needH);
+      metrics.crossGaps=hs.map(h=>rnd(dist(h,v)));
+      for(const h of hs){const p=intersectionAtY(v,h.c.y).x;let l=p-h.minX,r=h.maxX-p;
+        if(l<-.012||r<-.012){issue('cross_side','wrong_structure','横棒が縦棒の左右両側に伸びていません。');balance(43,'横棒が左右どちらかに偏っています。');}
+        else if(l<.025||r<.025){issue('cross_short','redo','横棒を縦棒の両側へ少し伸ばしましょう。');balance(69,'左右の横棒の張り出しが不均等です。');}
+        if(dist(h,v)>.08){issue('cross_gap','wrong_structure','横棒と縦棒が大きく離れています。');balance(43,'横画と縦画の位置が離れています。');}}
+      let lastY=hs.at(-1).c.y,vEnd=v.maxY,over=vEnd-lastY;
+      metrics.lowerStemOverrun=rnd(over);
+      let stop=char==='王';
+      if(stop&&over>.12){issue('stem_should_stop','wrong_structure','王の縦線は最下横線で止まります。');balance(43,'縦線が最下横画より大きく下に突出しています。');}
+      else if(stop&&over>.045){issue('stem_should_stop','redo','王の縦線の下への突き抜けを短くしましょう。');balance(69,'縦線の終筆が低すぎます。');}
+      if(!stop&&over<.035){issue('stem_should_pass','redo','縦棒を最後の横線より下まで伸ばしましょう。');balance(69,'縦線の下への伸びが不足しています。');}
+      if(char==='牛'){
+        const others=aa.filter(o=>!hs.some(h=>h.i===o.i)&&o.i!==v.i);
+        if(others.length!==1||others[0].w<.05||others[0].h<.07){issue('cow_slant','wrong_structure','牛の左上の短い斜画が必要です。');balance(43,'左上の斜画が不足しています。');}}
+   }
+ }
+ }
+ let glyphFit=sampledFontFit(strokes,char),similarity=glyphFit===null?prototypeFit(strokes,char):glyphFit;
+ let connect=100,proportion=100,branch=100;
+ metrics.imageSimilarity=similarity;metrics.referenceSource=glyphFit===null?'fallback-vector-not-a-textbook-font':'Klee One browser-rendered glyph';
+ let score=rnd(Math.min(cap,.80*similarity+.12*proportion+.08*connect));
+ let hard=faults.some(f=>f.severity==='wrong_structure'),soft=faults.some(f=>f.severity==='redo');
+ let structure=hard?'wrong_structure':soft?'redo':'provisional_ok';
+ let grace=structure==='provisional_ok'&&balanceReasons.length===0&&score>=70;
+ let balanceStatus=(score>=72||grace)?'provisional_ok':score>=48?'redo':'wrong_structure';
+ let degree={provisional_ok:0,redo:1,wrong_structure:2};let overall=degree[structure]>=degree[balanceStatus]?structure:balanceStatus;
+ let structureAdvice=faults.length?[...new Set(faults.map(x=>x.message))].join(' '):'構造上の問題は見つかりませんでした。';
+ let balanceAdvice=balanceReasons.length?[...new Set(balanceReasons)].join(' '):balanceStatus==='provisional_ok'?'お手本との全体バランスは良好です。':'お手本と比べて位置・長さ・余白の違いがあります。';
+ let advice='【構造】'+structureAdvice+' 【バランス】'+balanceAdvice;
+ return {schema:'kanji-structure-v6.5',target:char,strokes:strokes.length,structuralResult:{kind:structure==='provisional_ok'?'ok':structure==='redo'?'retry':'wrong',identity:structure,status:structure,checks:faults.map(x=>x.message),advice:structureAdvice,metrics},balanceAnalysis:{status:'measured',method:glyphFit===null?'vector-fallback-plus-geometry':'Klee-One-glyph-sampled-Chamfer-plus-geometry-v2',reference:glyphFit===null?`${char}-vector-prototype-fallback`:`${char}-Klee-One-glyph`,imageSimilarity:similarity,balanceShapeLimit:cap,balanceReasons,proportionScore:proportion,branchPositionScore:branch,connectionScore:connect,overallScore:score,verdict:balanceStatus,borderlineGraceApplied:grace,advice:balanceAdvice,thresholds:{ok:72,redo:48,borderlineGraceMin:70},note:'追加文字の判定は暫定基準。字体は教科書体近似で、書き順は採点していません。'},evaluation:{identity:overall,structure,balance:balanceStatus,rule:'worst_of_both',shape:{status:overall==='provisional_ok'?'compatible':overall==='redo'?'needs_improvement':'incompatible',reason:advice},count:{status:strokes.length===expected?'ok':'mismatch',expected,actual:strokes.length},order:{status:'not_checked',message:'書き順は未検証です。'}},learningPractice:{status:overall==='provisional_ok'?'none':'offer',current:{status:overall==='provisional_ok'?'clear':'needs_practice',reason:advice}},strokeOrder:{status:'not_checked'},advice,structureAdvice,balanceAdvice,issues:faults};
+}
+
+function analyze(char,strokeInput){if(BOX_CHARS.has(char)||CROSS_CHARS.has(char))return evalAdditional(char,strokeInput);let strokes=strokeInput.filter(s=>Array.isArray(s)&&s.length>1).map(s=>s.map(p=>({x:Number(p.x),y:Number(p.y)})).filter(p=>Number.isFinite(p.x)&&Number.isFinite(p.y)));if(!REF[char])throw Error('対応漢字は末・未・土・士・日・目・回・田・口・十・干・王・牛です');const expected=REF[char].count,actual=strokes.length;const n=normalize(strokes), s=n.strokes, r=roles(s,char);let faults=[],advice=[],metrics={},isTree=char==='末'||char==='未';
+if(actual!==expected){faults.push({code:'stroke_count',severity:'redo',message:`画数は${expected}画です。現在${actual}画です。`});}
+if(!r){faults.push({code:'roles',severity:'wrong_structure',message:'必要な横線・縦線の骨組みが確認できません。'});}else{
+let up=r.upper,lo=r.lower,v=r.v;let ratio=lo.w/Math.max(up.w,.001);metrics.lowerToUpperRatio=rnd(ratio);metrics.upperWidth=rnd(up.w);metrics.lowerWidth=rnd(lo.w);
+if(((char==='末'||char==='士')&&ratio>=1.015)||((char==='未'||char==='土')&&ratio<=.985))faults.push({code:'contrast',severity:'wrong_structure',message:`「${char}」の上下横線の長短関係が逆です。`});
+else if(Math.abs(ratio-1)<=.045)faults.push({code:'contrast_near_equal',severity:'redo',message:'上下の横線の長さの違いをはっきりさせましょう。'});
+const upContact=polyDist(up.s,v.s),loContact=polyDist(lo.s,v.s),scaleGap=.035;metrics.upperStemGap=rnd(upContact);metrics.lowerStemGap=rnd(loContact);for(let [key,d] of [['upper_cross',upContact],['lower_cross',loContact]]){if(d>.085)faults.push({code:key,severity:'wrong_structure',message:'横線と中央縦線が大きく離れています。'});else if(d>scaleGap)faults.push({code:key,severity:'redo',message:'横線と中央縦線のつながりを確認しましょう。'});}
+// 横線は縦棒と接しているだけでなく、縦棒の左右へ実際に伸びる必要がある。
+// 各横画の高さで縦棒のx座標を求め、左右両側の実筆跡の張り出しを測る。
+for (const [label,h] of [['上',up],['下',lo]]) {
+  const pivot=intersectionAtY(v,h.c.y).x;
+  const leftExtent=pivot-Math.min(...h.s.map(p=>p.x));
+  const rightExtent=Math.max(...h.s.map(p=>p.x))-pivot;
+  const field=label==='上'?'upper':'lower';
+  metrics[field+'HorizontalLeftReach']=rnd(leftExtent);
+  metrics[field+'HorizontalRightReach']=rnd(rightExtent);
+  if(leftExtent<-.015 || rightExtent<-.015){
+    faults.push({code:field+'_horizontal_missing_side',severity:'wrong_structure',message:`${label}の横棒が中央縦棒を横切らず、${leftExtent<rightExtent?'左':'右'}側に伸びていません。`});
+  } else if(leftExtent<.03 || rightExtent<.03){
+    faults.push({code:field+'_horizontal_short_side',severity:'redo',message:`${label}の横棒を中央縦棒の左右にもう少し伸ばしましょう。`});
+  }
+}
+const vymin=Math.min(...v.s.map(p=>p.y)),vymax=Math.max(...v.s.map(p=>p.y));let upY=up.c.y,loY=lo.c.y;metrics.stemTopExtension=rnd(upY-vymin);
+if(vymin>upY-.025)faults.push({code:'stem_top',severity:'wrong_structure',message:'中央縦線を上横線より上から通しましょう。'});
+// 中央縦線の終筆と最下横画の位置関係。交差判定とは独立して検証する。
+// 末・未は下横線を縦棒が突き抜け、土・士は下横線で止まる。
+const lowerTermination=LOWER_STEM_RULE[char];
+const stemOverrun=vymax-loY; metrics.lowerStemTerminationRule=lowerTermination;
+metrics.lowerStemOverrun=rnd(stemOverrun);
+if(lowerTermination==='stops'){
+ if(stemOverrun>.13)faults.push({code:'lower_stem_overrun',severity:'wrong_structure',message:`「${char}」の縦棒は最後の横棒で止めます。下へ大きく突き抜けています。`});
+ else if(stemOverrun>.04)faults.push({code:'lower_stem_overrun',severity:'redo',message:`「${char}」の縦棒は最後の横棒で止めます。突き抜けた部分を短くしましょう。`});
+}else if(stemOverrun<.035)faults.push({code:'lower_stem_should_pass',severity:'redo',message:`「${char}」の中央縦棒は下横線より下まで伸ばしましょう。`});
+if(isTree){if(r.branches.length!==2)faults.push({code:'branches',severity:'wrong_structure',message:'左右の払いが2画あるか確認しましょう。'});else{let p=intersectionAtY(v,loY);let lowStarts=[];let branchD=[];for(let b of r.branches){let start=b.s[0],end=b.s[b.s.length-1];let nearStart=pointPolylineDist(start,v.s),relativeY=start.y-loY;branchD.push(nearStart);lowStarts.push(relativeY);if(Math.abs(end.x-start.x)<.065||end.y<start.y+.07)faults.push({code:'branch_direction',severity:'redo',message:'払いを左右の斜め下方向に広げましょう。'});if(nearStart>.095)faults.push({code:'branch_gap',severity:'wrong_structure',message:'払いが中央縦線から大きく離れています。'});else if(nearStart>.05)faults.push({code:'branch_gap',severity:'redo',message:'払いの始点を中央線にもう少し近づけましょう。'});if(relativeY>.30||relativeY<-.17)faults.push({code:'branch_height',severity:'wrong_structure',message:'払いを下横線と中央縦線の交点付近から書き始めましょう。'});else if(relativeY>.135||relativeY<-.10)faults.push({code:'branch_height',severity:'redo',message:'払いを下の横線と縦線の交点付近から書き始めましょう。'});}let sortedBranches=r.branches.slice().sort((a,b)=>a.c.x-b.c.x);
+let left=sortedBranches[0],right=sortedBranches[1],lEnd=left.s[left.s.length-1],rEnd=right.s[right.s.length-1];
+let lStart=left.s[0],rStart=right.s[0];
+let leftExtent=lEnd.x-lStart.x,rightExtent=rEnd.x-rStart.x;
+metrics.branchDirections=[rnd(leftExtent),rnd(rightExtent)];
+if(leftExtent>=-.065||rightExtent<=.065)faults.push({code:'branch_side',severity:'wrong_structure',message:'左払いは左下へ、右払いは右下へ広げましょう。'});
+metrics.branchStartOffsets=lowStarts.map(rnd);metrics.branchStemGaps=branchD.map(rnd);metrics.stemBeyondBranches=rnd(vymax-Math.max(...r.branches.map(b=>b.s[0].y)));if(vymax<Math.max(...r.branches.map(b=>b.s[0].y))+.035)faults.push({code:'stem_extension',severity:'wrong_structure',message:'中央縦線を払いの分岐位置より下に伸ばしましょう。'});}
+}else{if(vymax<loY-.035)faults.push({code:'stem_bottom',severity:'redo',message:'中央縦線と下横線の長さを確認しましょう。'});}}
+let glyphFit=sampledFontFit(strokes,char);
+let similarity=glyphFit===null?prototypeFit(strokes,char):glyphFit;metrics.imageSimilarity=similarity;
+metrics.referenceSource=glyphFit===null?'fallback-vector-not-a-textbook-font':'Klee One browser-rendered glyph';
+let proportionScore=r ? Math.round(clamp(1-Math.abs((metrics.lowerToUpperRatio||.6)-(char==='末'?.59:char==='未'?1.7:char==='土'?1.5:.6))/1.3)*100) : 0;
+let branchScore=isTree && r && r.branches.length===2 ? Math.round(100*clamp(1-(Math.max(...(metrics.branchStartOffsets||[1]).map(Math.abs))/.45))) : (isTree?0:100);
+let connectivityScore=r ? Math.round(100*clamp(1-(Math.max(metrics.upperStemGap||0,metrics.lowerStemGap||0)/.15))) : 0;
+metrics.proportionScore=proportionScore;metrics.branchPositionScore=branchScore;metrics.connectivityScore=connectivityScore;
+let overallScore=rnd(.72*similarity+.13*proportionScore+.10*branchScore+.05*connectivityScore);
+// Balance is evaluated independently of the structural verdict. Quantify shape defects
+// which a global Chamfer score can obscure (missing/duplicated parts, gaps, reversed arms).
+let balanceLimit=100;
+let balanceReasons=[];
+if(actual!==expected){balanceLimit=Math.min(balanceLimit,actual<expected?43:65);balanceReasons.push('お手本と比較して画の数・形のまとまりが違います。');}
+if(!r){balanceLimit=Math.min(balanceLimit,39);balanceReasons.push('お手本にある横線・縦線の配置が確認できません。');}
+else {
+  for (const field of ['upper','lower']) {
+    const l=metrics[field+'HorizontalLeftReach'],rt=metrics[field+'HorizontalRightReach'];
+    if(l<-.015||rt<-.015){
+      balanceLimit=Math.min(balanceLimit,43);
+      balanceReasons.push('横棒が縦棒の片側まで届かず、左右の形の釣り合いが大きく崩れています。');
+    } else if(l<.03||rt<.03){
+      balanceLimit=Math.min(balanceLimit,69);
+      balanceReasons.push('横棒の縦棒から左右への張り出しが短く、左右の幅が不均等です。');
+    }
+  }
+  const worstCross=Math.max(metrics.upperStemGap||0,metrics.lowerStemGap||0);
+  if(worstCross>.085){balanceLimit=Math.min(balanceLimit,44);balanceReasons.push('横線と縦線の位置が離れています。');}
+  else if(worstCross>.035){balanceLimit=Math.min(balanceLimit,69);balanceReasons.push('横線と縦線の接続位置を見直しましょう。');}
+  // 終筆方向のずれは全体の重心にも影響するため、バランス側でも独立に評価する。
+  if(LOWER_STEM_RULE[char]==='stops' && metrics.lowerStemOverrun>.13){
+    balanceLimit=Math.min(balanceLimit,43);
+    balanceReasons.push('縦棒が最下横画を大きく突き抜け、字の重心が下へ偏っています。最下横画で止めましょう。');
+  } else if(LOWER_STEM_RULE[char]==='stops' && metrics.lowerStemOverrun>.04){
+    balanceLimit=Math.min(balanceLimit,68);
+    balanceReasons.push('縦棒が最下横画より下に長く伸びており、上下のバランスが崩れています。');
+  } else if(LOWER_STEM_RULE[char]==='passes' && metrics.lowerStemOverrun<.035){
+    balanceLimit=Math.min(balanceLimit,69);
+    balanceReasons.push('中央縦棒の下への伸びが足りず、上下の釣り合いが崩れています。');
+  }
+  if(isTree){
+    if(r.branches.length!==2){balanceLimit=Math.min(balanceLimit,38);balanceReasons.push('左右の払いの形が揃っていません。');}
+    else {
+      const ds=metrics.branchDirections||[];
+      if(ds[0]>=-.065||ds[1]<=.065){balanceLimit=Math.min(balanceLimit,43);balanceReasons.push('左右の払いの広がる方向が違います。');}
+      if((metrics.branchStemGaps||[]).some(d=>d>.095)){balanceLimit=Math.min(balanceLimit,44);balanceReasons.push('払いが中央から大きく離れています。');}
+      if((metrics.branchStartOffsets||[]).some(y=>y>.30||y<-.17)){balanceLimit=Math.min(balanceLimit,46);balanceReasons.push('払いの分岐位置が標準より大きくずれています。');}
+      // 左右とも始点が低いと、字全体の下側に重みが偏る。構造評価とは独立したバランスの観点。
+      else if((metrics.branchStartOffsets||[]).length===2 && (metrics.branchStartOffsets||[]).every(y=>y>.18)){
+        balanceLimit=Math.min(balanceLimit,69);
+        balanceReasons.push('左右両方の払いが低い位置から広がり、文字の下側に重みが偏っています。払いの始点を下横線と縦線の交点付近へ上げましょう。');
+      }
+    }
+  }
+}
+overallScore=rnd(Math.min(overallScore,balanceLimit));
+metrics.balanceShapeLimit=balanceLimit;
+// Image similarity alone is not handwriting probability; scores represent reference layout fit.
+// Gating: mandatory geometry cannot be overridden by a visually similar outline.
+let hard=faults.some(f=>f.severity==='wrong_structure'),soft=faults.some(f=>f.severity==='redo');
+// The two evaluators always run, even when structural constraints already fail.
+let structureStatus=hard?'wrong_structure':soft?'redo':'provisional_ok';
+// 境界で具体的な欠点が検出されない場合は僅差を許容。数値はそのまま記録する。
+let borderGrace=structureStatus==='provisional_ok' && balanceReasons.length===0 && overallScore>=70 && overallScore<72;
+let balanceStatus=(overallScore>=72 || borderGrace)?'provisional_ok':overallScore>=48?'redo':'wrong_structure';
+let severity={provisional_ok:0,redo:1,wrong_structure:2};
+let identity=severity[structureStatus]>=severity[balanceStatus]?structureStatus:balanceStatus;
+let structureAdvice=faults.length?Array.from(new Set(faults.map(f=>f.message))).join(' '):'構造上の問題は見つかりませんでした。';
+let balanceAdvice=(balanceReasons.length?Array.from(new Set(balanceReasons)).join(' '):balanceStatus==='provisional_ok'?'お手本との全体バランスは良好です。':balanceStatus==='redo'?'お手本と比べて線の位置・長さ・余白・払いの広がりを整えましょう。':'お手本から全体の形が大きくずれています。横線の長さ、重心、払いの方向や広がりを見直しましょう。');
+let suggested='【構造】'+structureAdvice+' 【バランス】'+balanceAdvice;
+return {schema:'kanji-structure-v6.5',target:char,strokes:actual,structuralResult:{kind:structureStatus==='provisional_ok'?'ok':structureStatus==='redo'?'retry':'wrong',identity:structureStatus,status:structureStatus,checks:faults.map(f=>f.message),advice:structureAdvice,metrics},balanceAnalysis:{status:'measured',method:glyphFit===null?'vector-fallback-plus-geometry':'Klee-One-glyph-sampled-Chamfer-plus-geometry-v2',reference:glyphFit===null?`${char}-vector-prototype-fallback`:`${char}-Klee-One-glyph`,imageSimilarity:similarity,balanceShapeLimit:balanceLimit,balanceReasons,proportionScore,branchPositionScore:branchScore,connectionScore:connectivityScore,overallScore,verdict:balanceStatus,borderlineGraceApplied:borderGrace,advice:balanceAdvice,thresholds:{ok:72,redo:48,borderlineGraceMin:70},note:'点数は暫定的なお手本への形状近似度であり、正解確率ではありません。'},evaluation:{identity,structure:structureStatus,balance:balanceStatus,rule:'worst_of_both',shape:{status:identity==='provisional_ok'?'compatible':identity==='redo'?'needs_improvement':'incompatible',reason:suggested},count:{status:expected===actual?'ok':'mismatch',expected,actual},order:{status:'not_checked',message:'書き順は未検証です。'}},learningPractice:{status:identity==='provisional_ok'?'none':'offer',current:{status:identity==='provisional_ok'?'clear':'needs_practice',reason:suggested}},strokeOrder:{status:'not_checked'},advice:suggested,structureAdvice,balanceAdvice,issues:faults};}
+root.KanjiV65={analyze,normalize,reference:REF,prototypeFit,chamfer,setFontReference};
+if(typeof module!=='undefined'&&module.exports)module.exports=root.KanjiV65;
+})(typeof window!=='undefined'?window:globalThis);
+
+</script><script>
+(()=>{'use strict';const canvas=document.querySelector('#pad'),ctx=canvas.getContext('2d'),refCanvas=document.querySelector('#model'),rc=refCanvas.getContext('2d');let strokes=[],active=null,last=null;let target=document.querySelector('#kanji');function style(c){c.lineCap='round';c.lineJoin='round';c.strokeStyle='#183d61';c.lineWidth=5;}function draw(){ctx.clearRect(0,0,600,600);ctx.strokeStyle='#ecf0f4';ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(300,0);ctx.lineTo(300,600);ctx.moveTo(0,300);ctx.lineTo(600,300);ctx.stroke();style(ctx);for(let st of [...strokes,...(active?[active]:[])]){if(!st.length)continue;ctx.beginPath();ctx.moveTo(st[0].x,st[0].y);for(let i=1;i<st.length;i++)ctx.lineTo(st[i].x,st[i].y);ctx.stroke();}}function model(){rc.clearRect(0,0,220,220);rc.strokeStyle='#e5e7eb';rc.lineWidth=1;rc.strokeRect(20,20,180,180);rc.fillStyle='#183d61';rc.font='170px "Klee One"';rc.textAlign='center';rc.textBaseline='middle';rc.fillText(target.value,110,110);}
+function getPoint(e){let r=canvas.getBoundingClientRect();return {x:(e.clientX-r.left)/r.width*600,y:(e.clientY-r.top)/r.height*600,t:Date.now()};}function down(e){e.preventDefault();canvas.setPointerCapture(e.pointerId);active=[getPoint(e)];draw();}function move(e){if(!active)return;e.preventDefault();let p=getPoint(e),q=active[active.length-1];if(Math.hypot(p.x-q.x,p.y-q.y)>.9){active.push(p);draw();}}function up(e){if(active){if(active.length===1)active.push({...active[0],x:active[0].x+.1});strokes.push(active);active=null;draw();}}canvas.addEventListener('pointerdown',down);canvas.addEventListener('pointermove',move);canvas.addEventListener('pointerup',up);canvas.addEventListener('pointercancel',up);document.querySelector('#clear').onclick=()=>{strokes=[];last=null;document.querySelector('#result').textContent='入力待ち';document.querySelector('#score').textContent='—';document.querySelector('#subscores').textContent='構造：—　｜　バランス：—';document.querySelector('#export').disabled=true;draw();};document.querySelector('#undo').onclick=()=>{strokes.pop();last=null;document.querySelector('#export').disabled=true;draw();};target.onchange=()=>{document.querySelector('#clear').click();model();document.querySelector('#advice').textContent='新しい字を書いてください。';};document.querySelector('#judge').onclick=()=>{if(!strokes.length)return;if(!fontReady){document.querySelector('#advice').textContent='参照フォントの読み込みが完了していません。ネット接続を確認してください。';return;}let r=KanjiV65.analyze(target.value,strokes);last={...r,createdAt:new Date().toISOString(),canvas:{width:600,height:600},strokes};let symbols={provisional_ok:'◯ 暫定合格',redo:'✏️ 書き直し',wrong_structure:'❌ NG'};let el=document.querySelector('#result');el.textContent=symbols[r.evaluation.identity];el.className='result '+({provisional_ok:'good',redo:'warn',wrong_structure:'bad'}[r.evaluation.identity]);document.querySelector('#score').textContent=r.balanceAnalysis.overallScore+' / 100';document.querySelector('#subscores').textContent='構造：'+symbols[r.evaluation.structure]+' ｜ バランス：'+symbols[r.evaluation.balance];document.querySelector('#advice').textContent=r.advice;document.querySelector('#detail').textContent=JSON.stringify({...r,strokes:undefined},null,2);document.querySelector('#export').disabled=false;};document.querySelector('#export').onclick=()=>{if(!last)return;let blob=new Blob([JSON.stringify(last,null,2)],{type:'application/json'}),a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='kanji-structure-v6.5-'+last.target+'-'+Date.now()+'.json';a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000);};let fontReady=false;document.querySelector('#judge').disabled=true;
+async function prepareFont(){const status=document.querySelector('#fontstatus');try{
+ await document.fonts.load('220px "Klee One"','末未土士日目回田口十干王牛');
+ const loaded=Array.from(document.fonts).some(face=>face.family.replace(/["']/g,'')==='Klee One'&&face.status==='loaded');
+ if(!loaded)throw Error('フォントを読み込めませんでした');
+ for(const kanji of ['末','未','土','士','日','目','回','田','口','十','干','王','牛']){
+ const c=document.createElement('canvas');c.width=260;c.height=260;const g=c.getContext('2d');g.fillStyle='#000';g.font='210px "Klee One"';g.textAlign='center';g.textBaseline='middle';g.fillText(kanji,130,135);
+ const data=g.getImageData(0,0,260,260).data;let raw=[],minX=260,minY=260,maxX=0,maxY=0;
+ for(let y=0;y<260;y+=3)for(let x=0;x<260;x+=3){if(data[(y*260+x)*4+3]>110){raw.push({x,y});minX=Math.min(minX,x);maxX=Math.max(maxX,x);minY=Math.min(minY,y);maxY=Math.max(maxY,y);}}
+ const w=maxX-minX,h=maxY-minY,scale=Math.max(w,h);if(raw.length<50||!scale)throw Error('字形データが空です');
+ const step=Math.max(1,Math.ceil(raw.length/450));let sample=raw.filter((_,i)=>i%step===0).map(p=>({x:(p.x-minX+(scale-w)/2)/scale,y:(p.y-minY+(scale-h)/2)/scale}));KanjiV65.setFontReference(kanji,sample);
+ }
+ fontReady=true;document.querySelector('#judge').disabled=false;status.textContent='Klee One 字形読込済み（正式な教科書体ではありません）';model();
+ }catch(err){status.textContent='参照フォント未読込。ネット接続を確認してください（採点は停止中）。';console.error(err);}}
+ prepareFont();model();draw();})();
+</script></body></html>
