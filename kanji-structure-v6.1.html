@@ -67,6 +67,11 @@ else {
       if(ds[0]>=-.065||ds[1]<=.065){balanceLimit=Math.min(balanceLimit,43);balanceReasons.push('左右の払いの広がる方向が違います。');}
       if((metrics.branchStemGaps||[]).some(d=>d>.095)){balanceLimit=Math.min(balanceLimit,44);balanceReasons.push('払いが中央から大きく離れています。');}
       if((metrics.branchStartOffsets||[]).some(y=>y>.30||y<-.17)){balanceLimit=Math.min(balanceLimit,46);balanceReasons.push('払いの分岐位置が標準より大きくずれています。');}
+      // 左右とも始点が低いと、字全体の下側に重みが偏る。構造評価とは独立したバランスの観点。
+      else if((metrics.branchStartOffsets||[]).length===2 && (metrics.branchStartOffsets||[]).every(y=>y>.18)){
+        balanceLimit=Math.min(balanceLimit,69);
+        balanceReasons.push('左右両方の払いが低い位置から広がり、文字の下側に重みが偏っています。払いの始点を下横線と縦線の交点付近へ上げましょう。');
+      }
     }
   }
 }
@@ -77,13 +82,15 @@ metrics.balanceShapeLimit=balanceLimit;
 let hard=faults.some(f=>f.severity==='wrong_structure'),soft=faults.some(f=>f.severity==='redo');
 // The two evaluators always run, even when structural constraints already fail.
 let structureStatus=hard?'wrong_structure':soft?'redo':'provisional_ok';
-let balanceStatus=overallScore>=72?'provisional_ok':overallScore>=48?'redo':'wrong_structure';
+// 境界で具体的な欠点が検出されない場合は僅差を許容。数値はそのまま記録する。
+let borderGrace=structureStatus==='provisional_ok' && balanceReasons.length===0 && overallScore>=70 && overallScore<72;
+let balanceStatus=(overallScore>=72 || borderGrace)?'provisional_ok':overallScore>=48?'redo':'wrong_structure';
 let severity={provisional_ok:0,redo:1,wrong_structure:2};
 let identity=severity[structureStatus]>=severity[balanceStatus]?structureStatus:balanceStatus;
 let structureAdvice=faults.length?Array.from(new Set(faults.map(f=>f.message))).join(' '):'構造上の問題は見つかりませんでした。';
 let balanceAdvice=(balanceReasons.length?Array.from(new Set(balanceReasons)).join(' '):balanceStatus==='provisional_ok'?'お手本との全体バランスは良好です。':balanceStatus==='redo'?'お手本と比べて線の位置・長さ・余白・払いの広がりを整えましょう。':'お手本から全体の形が大きくずれています。横線の長さ、重心、払いの方向や広がりを見直しましょう。');
 let suggested='【構造】'+structureAdvice+' 【バランス】'+balanceAdvice;
-return {schema:'kanji-structure-v6.1',target:char,strokes:actual,structuralResult:{kind:structureStatus==='provisional_ok'?'ok':structureStatus==='redo'?'retry':'wrong',identity:structureStatus,status:structureStatus,checks:faults.map(f=>f.message),advice:structureAdvice,metrics},balanceAnalysis:{status:'measured',method:'normalized_bidirectional_chamfer_plus_geometry_v1',reference:`${char}-vector-prototype`,imageSimilarity:similarity,balanceShapeLimit:balanceLimit,balanceReasons,proportionScore,branchPositionScore:branchScore,connectionScore:connectivityScore,overallScore,verdict:balanceStatus,advice:balanceAdvice,thresholds:{ok:72,redo:48},note:'点数は暫定的なお手本への形状近似度であり、正解確率ではありません。'},evaluation:{identity,structure:structureStatus,balance:balanceStatus,rule:'worst_of_both',shape:{status:identity==='provisional_ok'?'compatible':identity==='redo'?'needs_improvement':'incompatible',reason:suggested},count:{status:expected===actual?'ok':'mismatch',expected,actual},order:{status:'not_checked',message:'書き順は未検証です。'}},learningPractice:{status:identity==='provisional_ok'?'none':'offer',current:{status:identity==='provisional_ok'?'clear':'needs_practice',reason:suggested}},strokeOrder:{status:'not_checked'},advice:suggested,structureAdvice,balanceAdvice,issues:faults};}
+return {schema:'kanji-structure-v6.1',target:char,strokes:actual,structuralResult:{kind:structureStatus==='provisional_ok'?'ok':structureStatus==='redo'?'retry':'wrong',identity:structureStatus,status:structureStatus,checks:faults.map(f=>f.message),advice:structureAdvice,metrics},balanceAnalysis:{status:'measured',method:'normalized_bidirectional_chamfer_plus_geometry_v1',reference:`${char}-vector-prototype`,imageSimilarity:similarity,balanceShapeLimit:balanceLimit,balanceReasons,proportionScore,branchPositionScore:branchScore,connectionScore:connectivityScore,overallScore,verdict:balanceStatus,borderlineGraceApplied:borderGrace,advice:balanceAdvice,thresholds:{ok:72,redo:48,borderlineGraceMin:70},note:'点数は暫定的なお手本への形状近似度であり、正解確率ではありません。'},evaluation:{identity,structure:structureStatus,balance:balanceStatus,rule:'worst_of_both',shape:{status:identity==='provisional_ok'?'compatible':identity==='redo'?'needs_improvement':'incompatible',reason:suggested},count:{status:expected===actual?'ok':'mismatch',expected,actual},order:{status:'not_checked',message:'書き順は未検証です。'}},learningPractice:{status:identity==='provisional_ok'?'none':'offer',current:{status:identity==='provisional_ok'?'clear':'needs_practice',reason:suggested}},strokeOrder:{status:'not_checked'},advice:suggested,structureAdvice,balanceAdvice,issues:faults};}
 root.KanjiV61={analyze,normalize,reference:REF,prototypeFit,chamfer};
 if(typeof module!=='undefined'&&module.exports)module.exports=root.KanjiV61;
 })(typeof window!=='undefined'?window:globalThis);
