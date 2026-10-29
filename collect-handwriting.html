@@ -1,0 +1,52 @@
+<!doctype html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>漢字実書字データ収集</title><style>
+body{font-family:system-ui,'Noto Sans JP',sans-serif;max-width:980px;margin:24px auto;padding:0 16px;color:#1c2530}h1{font-size:1.5rem}p{line-height:1.65}button,input{font:inherit}button{padding:10px 14px;margin:5px 6px 5px 0;border:1px solid #8794a6;background:white;border-radius:8px;cursor:pointer}button:disabled{opacity:.4;cursor:default}.canvases{display:flex;flex-wrap:wrap;gap:20px}.panel{flex:1;min-width:260px}canvas{width:min(100%,420px);aspect-ratio:1;border:2px solid #97a3b1;border-radius:8px;touch-action:none;background:#fff}.status{padding:12px;background:#eef3f8;border-radius:8px;margin:14px 0}.small{font-size:.9rem;color:#495867}</style></head><body>
+<h1>漢字の実書字データ収集</h1><p>まず <code>prepare-real.js</code> で作成した参照JSONを選択してください。左側のお手本を見ながら、右側に一画ずつ書いてください。書字の軌跡は端末内で処理され、外部送信されません。</p>
+<label>参照JSONを読み込む <input id="file" type="file" accept=".json,application/json"></label>
+<div id="status" class="status" role="status">未読込</div><div class="canvases"><div class="panel"><strong>お手本</strong><div><canvas id="ref" width="436" height="436"></canvas></div></div><div class="panel"><strong>書字欄（指・ペン・マウス）</strong><div><canvas id="write" width="436" height="436"></canvas></div></div></div>
+<div><button id="undo" disabled>最後の一画を取り消す</button><button id="clear" disabled>書き直す</button><button id="prev" disabled>前の漢字</button><button id="next" disabled>次の漢字（保存）</button><button id="export" disabled>入力データをJSON保存</button><button id="evaluate" disabled>現在の漢字を診断</button></div>
+<div id="diagnosis" class="status" aria-live="polite">診断は未実行です。しきい値は試験用であり、正式な採点ではありません。</div>
+<p class="small">1画は押してから離すまでです。各画は109×109の座標に記録します。画数が異なる場合は保存できますが診断側では評価保留になります。通常の点数・評価基準は一切変更しません。入力する文字に個人情報を含めないでください。</p>
+<script>
+'use strict';
+const $=id=>document.getElementById(id),refCanvas=$('ref'),writeCanvas=$('write'),refCtx=refCanvas.getContext('2d'),writeCtx=writeCanvas.getContext('2d');
+const S=4, FRAME=109;let payload=null,index=0,active=null,completed=new Map();
+function validStroke(s){return Array.isArray(s)&&s.length>=2&&s.every(p=>Array.isArray(p)&&p.length===2&&p.every(Number.isFinite));}
+function drawGrid(ctx){ctx.clearRect(0,0,436,436);ctx.strokeStyle='#e3e7ed';ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(218,0);ctx.lineTo(218,436);ctx.moveTo(0,218);ctx.lineTo(436,218);ctx.stroke();}
+function draw(ctx,strokes,color){ctx.strokeStyle=color;ctx.lineWidth=3;ctx.lineCap='round';ctx.lineJoin='round';for(const s of strokes){if(!validStroke(s))continue;ctx.beginPath();ctx.moveTo(s[0][0]*S,s[0][1]*S);for(const p of s.slice(1))ctx.lineTo(p[0]*S,p[1]*S);ctx.stroke();}}
+function getStrokes(){return completed.get(index)||[];}
+function redraw(){drawGrid(refCtx);drawGrid(writeCtx);if(!payload)return;const item=payload.items[index];draw(refCtx,item.reference||[], '#255ba7');draw(writeCtx,getStrokes(),'#d56b1c');if(active)draw(writeCtx,[active],'#d56b1c');$('status').textContent=`${index+1}/${payload.items.length}　${item.kanji||item.id}　お手本 ${item.reference.length}画／記録 ${getStrokes().length}画`;for(const id of ['undo','clear','prev','next','export','evaluate'])$(id).disabled=false;$('prev').disabled=index===0;$('next').disabled=index===payload.items.length-1;}
+function pos(e){const r=writeCanvas.getBoundingClientRect();return [Math.max(0,Math.min(r.width,e.clientX-r.left))/r.width*FRAME,Math.max(0,Math.min(r.height,e.clientY-r.top))/r.height*FRAME].map(v=>Math.round(v*100)/100);}
+writeCanvas.addEventListener('pointerdown',e=>{if(!payload||active)return;writeCanvas.setPointerCapture(e.pointerId);active=[pos(e)];redraw();});
+writeCanvas.addEventListener('pointermove',e=>{if(!active)return;const p=pos(e),last=active[active.length-1];if(Math.hypot(p[0]-last[0],p[1]-last[1])>.25){active.push(p);redraw();}});
+function finish(e){if(!active)return;const p=pos(e);if(active.length===1)active.push([Math.min(FRAME,p[0]+.01),p[1]]);if(active.length>=2)completed.set(index,[...getStrokes(),active]);active=null;redraw();}
+writeCanvas.addEventListener('pointerup',finish);writeCanvas.addEventListener('pointercancel',()=>{active=null;redraw();});
+$('undo').onclick=()=>{completed.set(index,getStrokes().slice(0,-1));redraw();};$('clear').onclick=()=>{completed.delete(index);redraw();};$('prev').onclick=()=>{index--;redraw();$('diagnosis').textContent='診断は未実行です。';};$('next').onclick=()=>{index++;redraw();$('diagnosis').textContent='診断は未実行です。';};
+$('file').onchange=async e=>{try{const f=e.target.files[0];if(!f)return;const candidate=JSON.parse(await f.text());if(!Array.isArray(candidate.items)||!candidate.items.length||candidate.items.some(x=>!x||!Array.isArray(x.reference)||!x.reference.length||x.reference.some(s=>!validStroke(s))))throw new Error('items[].reference に有効な座標列が必要です');if(candidate.config?.frame&&(candidate.config.frame.width!==109||candidate.config.frame.height!==109))throw new Error('109×109以外の座標枠には未対応です');payload=candidate;index=0;completed=new Map();active=null;redraw();}catch(err){$('status').textContent='読み込み失敗: '+err.message;}};
+$('export').onclick=()=>{if(!payload)return;const items=payload.items.map((x,i)=>({id:x.id,kanji:x.kanji,reference:x.reference,writing:completed.has(i)&&completed.get(i).length?completed.get(i):null}));const config={...payload.config,frame:{width:109,height:109},endpointThreshold:payload.config?.endpointThreshold??.05,outerThreshold:payload.config?.outerThreshold??.05};const data={config,items,collection:{recorded:completed.size,total:items.length,warning:'These are raw handwriting samples. Thresholds are unvalidated, not formal grading criteria.'}};const url=URL.createObjectURL(new Blob([JSON.stringify(data,null,2)+'\n'],{type:'application/json'}));const a=document.createElement('a');a.href=url;a.download='handwriting-input.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);};
+
+// Browser-side parity implementation of v116 endpoints/outer diagnostics.
+// This is an advisory diagnostic, never a grade.
+function browserDiagnostic(reference,writing,endpointThreshold,outerThreshold){
+ if(!writing.length)return {status:'not_evaluable',reason:'writing_missing'};
+ if(reference.length!==writing.length)return {status:'not_evaluable',reason:'stroke_count_mismatch',expected:reference.length,actual:writing.length};
+ if(![endpointThreshold,outerThreshold].every(v=>Number.isFinite(v)&&v>=0))return {status:'not_evaluable',reason:'invalid_threshold'};
+ const distance=(a,b)=>Math.hypot((a[0]-b[0])/FRAME,(a[1]-b[1])/FRAME);
+ const endpoints=reference.map((r,i)=>({stroke:i+1,startError:distance(r[0],writing[i][0]),endError:distance(r[r.length-1],writing[i][writing[i].length-1])}));
+ for(const e of endpoints){e.startWarning=e.startError>endpointThreshold;e.endWarning=e.endError>endpointThreshold;}
+ const bounds=ss=>{const pp=ss.flat();return {left:Math.min(...pp.map(p=>p[0])),right:Math.max(...pp.map(p=>p[0])),top:Math.min(...pp.map(p=>p[1])),bottom:Math.max(...pp.map(p=>p[1]))};};
+ const a=bounds(reference),b=bounds(writing);
+ const differences={left:Math.abs(a.left-b.left)/FRAME,right:Math.abs(a.right-b.right)/FRAME,top:Math.abs(a.top-b.top)/FRAME,bottom:Math.abs(a.bottom-b.bottom)/FRAME};
+ const warnings=Object.fromEntries(Object.entries(differences).map(([k,v])=>[k,v>outerThreshold]));
+ const warningCount=endpoints.reduce((n,e)=>n+Number(e.startWarning)+Number(e.endWarning),0)+Object.values(warnings).filter(Boolean).length;
+ return {status:'evaluated',endpoints,outer:{differences,warnings},warningCount,scoringModified:false};
+}
+$('evaluate').onclick=()=>{
+ if(!payload)return;
+ const item=payload.items[index];const res=browserDiagnostic(item.reference,getStrokes(),payload.config?.endpointThreshold??.05,payload.config?.outerThreshold??.05);
+ if(res.status!=='evaluated'){$('diagnosis').textContent='評価保留：'+res.reason+(res.expected!==undefined?'（お手本'+res.expected+'画／書字'+res.actual+'画）':'');return;}
+ const alerts=res.endpoints.flatMap(e=>[e.startWarning?`${e.stroke}画目・始点`:null,e.endWarning?`${e.stroke}画目・終点`:null].filter(Boolean));
+ for(const [k,v] of Object.entries(res.outer.warnings))if(v)alerts.push('外形・'+({left:'左',right:'右',top:'上',bottom:'下'}[k]));
+ $('diagnosis').textContent=`補助診断：警告${res.warningCount}件。${alerts.length?alerts.join('、'):'設定値を超える差は検出されませんでした。'} 正式な構造評価の点数ではありません。`;
+};
+drawGrid(refCtx);drawGrid(writeCtx);
+</script></body></html>
